@@ -1,0 +1,545 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>TK-421 · Wallpaper bay</title>
+<style>
+  /* Wallpaper picker. A blast door in a Death Star corridor: the leaves part, the bay behind them holds the wallpapers.
+     Graphite and steel only (same decision as the launcher), sharp chamfered corners, Orbitron for the command voice, Geist for names.
+     One authored moment: the leaves opening. The four transitions share one interface (from, to, progress 0..1) so QML can port them 1:1.
+     ?open=1  opens the door on load.  ?effect=laser|hyperspace|doors|scan  picks the effect.  ?freeze=0.5  renders the transition frozen at that progress (for screenshots). */
+  :root {
+    color-scheme: dark;
+    --bg: #050505;
+    --surface: #0c0b0d;
+    --surface-alt: #1a1a21;
+    --text: #e8e6e3;
+    --muted: #8e8b88;
+    --accent: #b9b6b2;
+    --accent-text: #f2f0ed;
+    --border: #3f3e44;
+    --steel: #2a2a31;
+
+    --u: min(1px, 0.0734vw);          /* 1 design px; the door is 1280 px wide on a 2560 px screen */
+    --ch: calc(var(--u) * 16);        /* corner chamfer */
+    --ease: cubic-bezier(0.22, 1, 0.36, 1);
+    --mech: cubic-bezier(0.65, 0, 0.2, 1);   /* heavy machinery: slow start, slow stop */
+    --display: "Orbitron", "Geist", ui-sans-serif, sans-serif;
+    --ui: "Geist", ui-sans-serif, system-ui, sans-serif;
+  }
+
+  * { box-sizing: border-box; margin: 0; }
+  html, body { height: 100%; background: var(--bg); }
+  body { font-family: var(--ui); color: var(--text); overflow: hidden; -webkit-font-smoothing: antialiased; user-select: none; }
+  ::selection { background: #3f3e44; color: var(--text); }
+  button { font: inherit; color: inherit; background: none; border: 0; padding: 0; cursor: pointer; }
+  :focus-visible { outline: 1px solid var(--accent); outline-offset: 3px; }
+
+  /* ---------- wallpaper stack: from (what is shown), to (what is arriving), fx (bands + canvas) ---------- */
+  .wall { position: fixed; inset: 0; overflow: hidden; background: var(--bg); }
+  .layer { position: absolute; inset: 0; background: center / cover no-repeat; will-change: transform, filter; }
+  #to { visibility: hidden; }
+  #fx { position: absolute; inset: 0; pointer-events: none; }
+  #bands { position: absolute; inset: 0; pointer-events: none; overflow: hidden; }
+  #bands i { position: absolute; background-repeat: no-repeat; will-change: transform; box-shadow: inset 0 1px 0 rgba(255,255,255,0.07), inset 0 -1px 0 rgba(0,0,0,0.6); }
+
+  .vignette { position: fixed; inset: 0; pointer-events: none; opacity: 0; transition: opacity 220ms ease;
+    background: radial-gradient(ellipse at 50% 50%, rgba(5,5,5,0.10) 0%, rgba(5,5,5,0.55) 100%); }
+  .open .vignette { opacity: 1; transition: opacity 360ms ease; }
+  .scrim { position: fixed; inset: 0; }   /* click outside = cancel */
+  body:not(.open) .scrim { pointer-events: none; }
+
+  .cap {   /* context only: the real bar capsule */
+    position: fixed; top: 4px; left: 30px; height: 28px; padding: 0 12px;
+    display: flex; align-items: center;
+    background: var(--surface); border: 1px solid var(--border); border-radius: 14px;
+    font: 500 10px/28px var(--display); letter-spacing: 0.4px; color: #b5bac3;
+  }
+  .proto { position: fixed; left: 50%; bottom: 22px; transform: translateX(-50%); font: 500 10px/1 var(--display); letter-spacing: 0.26em; color: var(--accent-text); opacity: 0.55; text-shadow: 0 1px 8px rgba(0,0,0,0.8); transition: opacity 200ms; pointer-events: none; }
+  .open .proto { opacity: 0; }
+
+  /* ---------- the door ---------- */
+  .door {
+    position: fixed; left: 50%; top: 50%; width: calc(var(--u) * 1280);
+    transform: translate(-50%, -50%) scale(0.985);
+    padding: 1px; background: var(--border);
+    clip-path: polygon(var(--ch) 0, calc(100% - var(--ch)) 0, 100% var(--ch), 100% calc(100% - var(--ch)), calc(100% - var(--ch)) 100%, var(--ch) 100%, 0 calc(100% - var(--ch)), 0 var(--ch));
+    opacity: 0; visibility: hidden;
+    transition: opacity 180ms ease, transform 260ms var(--ease), visibility 0s 260ms;   /* exit is faster than entrance */
+  }
+  .open .door { opacity: 1; visibility: visible; transform: translate(-50%, -50%) scale(1); transition: opacity 220ms ease, transform 520ms var(--ease); }
+  .door-in {
+    background: var(--surface); display: grid; grid-template-rows: auto 1fr auto;
+    clip-path: polygon(calc(var(--ch) - 1px) 0, calc(100% - var(--ch) + 1px) 0, 100% calc(var(--ch) - 1px), 100% calc(100% - var(--ch) + 1px), calc(100% - var(--ch) + 1px) 100%, calc(var(--ch) - 1px) 100%, 0 calc(100% - var(--ch) + 1px), 0 calc(var(--ch) - 1px));
+  }
+
+  /* lintel: the effect row (left), one lamp per wallpaper (right) */
+  .lintel { height: calc(var(--u) * 44); padding: 0 calc(var(--u) * 28); display: flex; align-items: center; justify-content: space-between; border-bottom: 1px solid var(--border); }
+  /* the effect: one button. Click it or scroll over it to change the transition; the name slides in the direction of the change. */
+  .fxbtn { position: relative; display: flex; align-items: center; width: calc(var(--u) * 236); height: calc(var(--u) * 28); padding: 0 0 0 calc(var(--u) * 14); border: 1px solid var(--border); transition: border-color 160ms; overflow: hidden; }
+  .fxbtn:hover { border-color: var(--accent); }
+  .fxbtn .name { flex: 1; font: 500 calc(var(--u) * 12) / 1 var(--display); letter-spacing: 0.22em; color: var(--accent-text); text-align: left; transition: transform 220ms var(--ease), opacity 160ms; }
+  .fxbtn .name.out { opacity: 0; transition-duration: 80ms; }
+  .fxbtn svg { flex: none; width: calc(var(--u) * 12); height: calc(var(--u) * 28); margin-right: calc(var(--u) * 14); fill: none; stroke: var(--accent); stroke-width: 1.2; transition: stroke 160ms; }
+  .fxbtn:hover svg { stroke: var(--accent-text); }
+  .lamps { display: flex; gap: calc(var(--u) * 6); align-items: center; }
+  .lamps i { width: calc(var(--u) * 14); height: calc(var(--u) * 3); background: var(--steel); transition: background-color 220ms, transform 380ms var(--ease); }
+  .lamps i.on { background: var(--accent-text); transform: scaleX(1.5); }
+
+  /* bay: dark recess; the leaves cover it until the door opens */
+  .bay { position: relative; height: calc(var(--u) * 340); overflow: hidden; background: #060608; }
+  .bay::before, .bay::after {   /* ceiling and floor ribs of the corridor */
+    content: ""; position: absolute; left: 0; right: 0; height: calc(var(--u) * 22); z-index: 1; pointer-events: none;
+    background: repeating-linear-gradient(180deg, #121216 0 calc(var(--u) * 5), #08080a calc(var(--u) * 5) calc(var(--u) * 7));
+  }
+  .bay::before { top: 0; border-bottom: 1px solid #22222a; }
+  .bay::after { bottom: 0; border-top: 1px solid #22222a; }
+  .light {   /* strip light in the ceiling: hairline plus a wash falling on the wallpapers */
+    position: absolute; left: 6%; right: 6%; top: calc(var(--u) * 22); height: calc(var(--u) * 150); z-index: 1; pointer-events: none;
+    background: linear-gradient(180deg, rgba(242,240,237,0.10), transparent 85%); border-top: 1px solid rgba(242,240,237,0.5);
+    -webkit-mask-image: linear-gradient(90deg, transparent, #000 22%, #000 78%, transparent); mask-image: linear-gradient(90deg, transparent, #000 22%, #000 78%, transparent);
+    opacity: 0; transition: opacity 260ms ease;
+  }
+  .open .light { opacity: 1; transition: opacity 700ms ease 380ms; }
+
+  .rail { position: absolute; inset: 0; z-index: 2; }
+  .thumb {
+    position: absolute; left: 50%; top: 50%; width: calc(var(--u) * 400); height: calc(var(--u) * 225);
+    background: #000 center / cover no-repeat; border: 1px solid var(--border);
+    transition: transform 560ms var(--ease), opacity 420ms ease, filter 420ms ease, border-color 200ms;
+    cursor: pointer; will-change: transform;
+  }
+  .thumb::before { content: ""; position: absolute; inset: 0; background: rgba(5,5,5,0); transition: background-color 420ms ease; }
+  .thumb:not(.cur)::before { background: rgba(5,5,5,0.38); }
+  .thumb:not(.cur):hover::before { background: rgba(5,5,5,0.12); }
+  .thumb.cur { border-color: var(--accent); cursor: default; }
+  .thumb.cur::after {   /* corner brackets on the selected plate */
+    content: ""; position: absolute; inset: calc(var(--u) * -9); pointer-events: none;
+    --b: var(--accent-text);
+    background:
+      linear-gradient(var(--b), var(--b)) top left / calc(var(--u) * 14) 1px no-repeat,
+      linear-gradient(var(--b), var(--b)) top left / 1px calc(var(--u) * 14) no-repeat,
+      linear-gradient(var(--b), var(--b)) top right / calc(var(--u) * 14) 1px no-repeat,
+      linear-gradient(var(--b), var(--b)) top right / 1px calc(var(--u) * 14) no-repeat,
+      linear-gradient(var(--b), var(--b)) bottom left / calc(var(--u) * 14) 1px no-repeat,
+      linear-gradient(var(--b), var(--b)) bottom left / 1px calc(var(--u) * 14) no-repeat,
+      linear-gradient(var(--b), var(--b)) bottom right / calc(var(--u) * 14) 1px no-repeat,
+      linear-gradient(var(--b), var(--b)) bottom right / 1px calc(var(--u) * 14) no-repeat;
+  }
+
+  /* leaves */
+  .leaf {
+    position: absolute; top: 0; bottom: 0; width: 50%; z-index: 5;
+    background:
+      linear-gradient(180deg, rgba(255,255,255,0.045), transparent 38%),
+      repeating-linear-gradient(180deg, transparent 0 calc(var(--u) * 33), rgba(0,0,0,0.6) calc(var(--u) * 33) calc(var(--u) * 35), rgba(255,255,255,0.05) calc(var(--u) * 35) calc(var(--u) * 36)),
+      #18181d;
+    transition: transform 520ms var(--mech);
+  }
+  .leaf.l { left: 0; border-right: 1px solid #0a0a0c; }
+  .leaf.r { right: 0; border-left: 1px solid #0a0a0c; }
+  .open .leaf { transition: transform 820ms var(--mech) 260ms; }
+  .open .leaf.l { transform: translateX(-101%); }
+  .open .leaf.r { transform: translateX(101%); }
+  .leaf::before {   /* sunken panel */
+    content: ""; position: absolute; inset: calc(var(--u) * 40) calc(var(--u) * 46) calc(var(--u) * 40) calc(var(--u) * 46);
+    border: 1px solid rgba(255,255,255,0.06); outline: 1px solid rgba(0,0,0,0.55); outline-offset: -2px;
+  }
+  .leaf::after {   /* seam strip, heavier than the grooves */
+    content: ""; position: absolute; top: 0; bottom: 0; width: calc(var(--u) * 16);
+    background: linear-gradient(90deg, #0b0b0d, #202026 45%, #0b0b0d);
+    border-left: 1px solid #000; border-right: 1px solid #000;
+  }
+  .leaf.l::after { right: 0; }
+  .leaf.r::after { left: 0; }
+  .lock { position: absolute; left: 50%; top: 50%; z-index: 6; width: calc(var(--u) * 4); height: calc(var(--u) * 54); transform: translate(-50%, -50%); background: var(--steel); transition: background-color 160ms, opacity 200ms; }
+  .open .lock { background: var(--accent-text); opacity: 0; transition: background-color 120ms, opacity 260ms ease 260ms; }
+
+  /* jambs: the leaves retract into them, so the door still reads as a door once it is open */
+  .jamb {
+    position: absolute; top: 0; bottom: 0; width: calc(var(--u) * 58); z-index: 7;
+    background:
+      linear-gradient(180deg, rgba(255,255,255,0.04), transparent 30%),
+      repeating-linear-gradient(180deg, transparent 0 calc(var(--u) * 33), rgba(0,0,0,0.65) calc(var(--u) * 33) calc(var(--u) * 35), rgba(255,255,255,0.05) calc(var(--u) * 35) calc(var(--u) * 36)),
+      #121216;
+  }
+  .jamb.l { left: 0; border-right: 1px solid #2a2a31; box-shadow: calc(var(--u) * 14) 0 calc(var(--u) * 18) calc(var(--u) * -6) rgba(0,0,0,0.7); }
+  .jamb.r { right: 0; border-left: 1px solid #2a2a31; box-shadow: calc(var(--u) * -14) 0 calc(var(--u) * 18) calc(var(--u) * -6) rgba(0,0,0,0.7); }
+  .jamb i { position: absolute; left: 50%; top: calc(var(--u) * 16); width: calc(var(--u) * 14); height: calc(var(--u) * 3); transform: translateX(-50%); background: var(--steel); transition: background-color 240ms ease 520ms; }
+  .open .jamb i { background: var(--accent-text); }
+
+  /* sill */
+  .sill { height: calc(var(--u) * 50); padding: 0 calc(var(--u) * 28); display: flex; align-items: center; justify-content: space-between; border-top: 1px solid var(--border); }
+  .id { display: flex; align-items: baseline; gap: calc(var(--u) * 16); min-width: 0; }
+  .name { font: 500 calc(var(--u) * 15) / 1 var(--ui); color: var(--text); letter-spacing: 0.01em; white-space: nowrap; }
+  .meta { font: 500 calc(var(--u) * 11) / 1 var(--display); letter-spacing: 0.2em; color: var(--muted); white-space: nowrap; }
+  .keys { display: flex; gap: calc(var(--u) * 20); align-items: center; font: 500 calc(var(--u) * 11) / 1 var(--display); letter-spacing: 0.16em; color: var(--muted); white-space: nowrap; }
+  .keys span { display: inline-flex; align-items: center; gap: calc(var(--u) * 8); }
+  kbd { display: inline-grid; place-items: center; min-width: calc(var(--u) * 22); height: calc(var(--u) * 22); padding: 0 calc(var(--u) * 5); border: 1px solid var(--border); font: inherit; color: var(--text); letter-spacing: 0.1em; }
+  kbd svg { width: calc(var(--u) * 10); height: calc(var(--u) * 10); fill: none; stroke: currentColor; stroke-width: 1.4; stroke-linecap: square; }
+
+  /* applied: a 1-frame steel blink on the lintel lamps */
+  .door.applied .lamps i.on { animation: blink 360ms steps(2, jump-none) 1; }
+  @keyframes blink { 50% { background: var(--steel); } }
+
+  .noanim *, .noanim { transition: none !important; }
+
+  @media (prefers-reduced-motion: reduce) {
+    .door, .open .door, .leaf, .open .leaf, .thumb { transition-duration: 1ms; transition-delay: 0s; }
+    .open .leaf.l, .open .leaf.r { transform: none; opacity: 0; }
+  }
+</style>
+</head>
+<body>
+<div class="wall">
+  <div class="layer" id="from"></div>
+  <div class="layer" id="to"></div>
+  <div id="bands"></div>
+  <canvas id="fx"></canvas>
+</div>
+<div class="vignette"></div>
+<div class="scrim" id="scrim"></div>
+<div class="cap">TK-421</div>
+<div class="proto">SUPER + ALT + B</div>
+
+<main class="door" id="door" aria-label="Wallpaper bay">
+  <div class="door-in">
+    <header class="lintel">
+      <button class="fxbtn" id="fxbtn" aria-label="Transition effect"><span class="name" id="fxname"></span><svg viewBox="0 0 12 28"><path d="M0 11 6 5l6 6M0 17l6 6 6-6"/></svg></button>
+      <div class="lamps" id="lamps" aria-hidden="true"></div>
+    </header>
+    <section class="bay">
+      <div class="light"></div>
+      <div class="rail" id="rail"></div>
+      <div class="leaf l"></div>
+      <div class="leaf r"></div>
+      <div class="jamb l"><i></i></div>
+      <div class="jamb r"><i></i></div>
+      <i class="lock"></i>
+    </section>
+    <footer class="sill">
+      <div class="id"><span class="name" id="name"></span><span class="meta" id="meta"></span></div>
+      <div class="keys">
+        <span><kbd><svg viewBox="0 0 10 10"><path d="M9 5H1M4.5 1.5 1 5l3.5 3.5"/></svg></kbd><kbd><svg viewBox="0 0 10 10"><path d="M1 5h8M5.5 1.5 9 5 5.5 8.5"/></svg></kbd>WALLPAPER</span>
+        <span><kbd><svg viewBox="0 0 10 10"><path d="M5 9V1M1.5 4.5 5 1l3.5 3.5"/></svg></kbd><kbd><svg viewBox="0 0 10 10"><path d="M5 1v8M1.5 5.5 5 9l3.5-3.5"/></svg></kbd>EFFECT</span>
+        <span><kbd><svg viewBox="0 0 10 10"><path d="M9 1v4H1M4 2 1 5l3 3"/></svg></kbd>APPLY</span>
+        <span><kbd>ESC</kbd>CANCEL</span>
+      </div>
+    </footer>
+  </div>
+</main>
+
+<script>
+"use strict";
+const WALLS = [
+  ["Imperial Destroyer", "1920×804 · PNG"],
+  ["Stormtrooper OLED", "2132×900 · JPG"],
+  ["Star Wars", "3840×2160 · JPG"],
+  ["May the Force", "3840×2160 · JPG"],
+  ["Imperial Crawler", "1920×840 · JPG"],
+  ["Rebel Camp", "1846×1000 · JPG"],
+  ["Bespin", "3840×2160 · PNG"],
+  ["Tatooine", "3840×2160 · PNG"],
+  ["X-Wing", "3840×2160 · PNG"],
+].map(([name, meta], i) => ({ name, meta, url: `img/w0${i + 1}.jpg` }));
+const N = WALLS.length;
+const FX_ORDER = ["laser", "hyperspace", "doors", "scan"];
+
+const $ = id => document.getElementById(id);
+const from = $("from"), to = $("to"), bandsEl = $("bands"), cv = $("fx"), ctx = cv.getContext("2d");
+const q = new URLSearchParams(location.search);
+const reduced = matchMedia("(prefers-reduced-motion: reduce)").matches;
+
+const clamp = (x, a = 0, b = 1) => Math.min(b, Math.max(a, x));
+const easeInCubic = t => t * t * t;
+const easeOutCubic = t => 1 - Math.pow(1 - t, 3);
+const easeOutQuart = t => 1 - Math.pow(1 - t, 4);
+const easeOutExpo = t => (t >= 1 ? 1 : 1 - Math.pow(2, -10 * t));
+const easeInOutCubic = t => (t < 0.5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2);
+const easeInOutQuart = t => (t < 0.5 ? 8 * t ** 4 : 1 - Math.pow(-2 * t + 2, 4) / 2);
+const mod = (a, n) => ((a % n) + n) % n;
+
+WALLS.forEach(w => { const im = new Image(); im.src = w.url; });   // preload: no pop-in mid transition
+const setBg = (el, i) => { el.style.backgroundImage = `url("${WALLS[i].url}")`; };
+
+/* ---------- canvas ---------- */
+let W = 0, H = 0;
+function resize() {
+  const dpr = window.devicePixelRatio || 1;
+  W = innerWidth; H = innerHeight;
+  cv.width = Math.round(W * dpr); cv.height = Math.round(H * dpr);
+  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+}
+addEventListener("resize", resize); resize();
+const clearFx = () => ctx.clearRect(0, 0, W, H);
+
+/* ---------- effects: each is { dur, start(), render(p), end() }; from/to are the two layers ---------- */
+const FX = {};
+
+/* 1. SUPERLASER (default): eight beams converge, flash, a ring of light opens the new wallpaper from the centre. */
+FX.laser = {
+  label: "SUPERLASER", dur: 1000,
+  start() { to.style.clipPath = "circle(0px at 50% 50%)"; },
+  render(p) {
+    const cx = W / 2, cy = H / 2, maxR = Math.hypot(cx, cy) * 1.02, charge = 0.22;
+    clearFx();
+    if (p < charge) {
+      const c = p / charge, Rs = Math.min(W, H) * 0.55;
+      to.style.clipPath = "circle(0px at 50% 50%)";
+      ctx.lineCap = "butt"; ctx.strokeStyle = "rgba(236,240,238,0.85)"; ctx.lineWidth = 1.5;
+      for (let k = 0; k < 8; k++) {
+        const a = k * Math.PI / 4 + Math.PI / 8, head = Rs * (1 - easeInCubic(c)), tail = Math.min(Rs, head + Rs * 0.3);
+        ctx.beginPath(); ctx.moveTo(cx + Math.cos(a) * tail, cy + Math.sin(a) * tail); ctx.lineTo(cx + Math.cos(a) * head, cy + Math.sin(a) * head); ctx.stroke();
+      }
+      const core = 4 + 46 * c * c, g = ctx.createRadialGradient(cx, cy, 0, cx, cy, core);
+      g.addColorStop(0, `rgba(255,255,255,${0.3 + 0.7 * c})`); g.addColorStop(1, "rgba(255,255,255,0)");
+      ctx.fillStyle = g; ctx.beginPath(); ctx.arc(cx, cy, core, 0, 7); ctx.fill();
+      from.style.filter = "";
+      return;
+    }
+    const u = (p - charge) / (1 - charge), r = maxR * easeOutQuart(u), fade = Math.pow(1 - u, 0.7);
+    to.style.clipPath = `circle(${r.toFixed(1)}px at 50% 50%)`;
+    to.style.transform = `scale(${1 + 0.05 * (1 - easeOutCubic(u))})`;
+    to.style.filter = `brightness(${1 + 0.9 * (1 - u)})`;
+    from.style.filter = `brightness(${1 - 0.4 * Math.sin(Math.PI * Math.min(1, u * 1.3))})`;
+    const f = clamp(1 - u * 3.2);                                   // flash at the origin
+    if (f > 0) {
+      const g = ctx.createRadialGradient(cx, cy, 0, cx, cy, 260);
+      g.addColorStop(0, `rgba(255,255,255,${f})`); g.addColorStop(1, "rgba(255,255,255,0)");
+      ctx.fillStyle = g; ctx.beginPath(); ctx.arc(cx, cy, 260, 0, 7); ctx.fill();
+    }
+    ctx.save();
+    ctx.shadowColor = "rgba(236,240,238,0.9)"; ctx.shadowBlur = 26 * fade;
+    ctx.strokeStyle = `rgba(240,244,242,${fade})`; ctx.lineWidth = 1.5 + 3.5 * (1 - u);
+    ctx.beginPath(); ctx.arc(cx, cy, Math.max(0, r), 0, 7); ctx.stroke();
+    ctx.restore();
+    ctx.strokeStyle = `rgba(240,244,242,${0.35 * fade})`; ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.arc(cx, cy, Math.max(0, r - 14 - 24 * u), 0, 7); ctx.stroke();
+  },
+  end() {},
+};
+
+/* 2. HYPERSPACE: stars streak out of the centre, white flash, the new wallpaper drops out of lightspeed. */
+const STARS = Array.from({ length: 520 }, () => ({ a: Math.random() * Math.PI * 2, d: 0.015 + Math.random() * 0.5, z: 0.25 + Math.random() * 0.75, s: Math.random() }));
+FX.hyperspace = {
+  label: "HYPERSPACE", dur: 1200,
+  start() { to.style.opacity = "0"; },
+  render(p) {
+    const cx = W / 2, cy = H / 2, maxR = Math.hypot(cx, cy), split = 0.46;
+    clearFx();
+    // speed s(p) and travelled distance S(p): accelerate to the jump, decelerate out of it
+    const v = clamp((p - split) / (1 - split));
+    const speed = p < split ? easeInCubic(p / split) : Math.pow(2, -9 * v);
+    const dist = p < split ? 0.1125 * Math.pow(p / split, 4) : 0.1125 + 0.0794 * (1 - Math.pow(2, -9 * v));
+    const A = easeInCubic(clamp(p / split));
+    if (p < split + 0.04) {
+      from.style.visibility = ""; from.style.transform = `scale(${1 + 0.14 * A})`; from.style.filter = `blur(${(A * 2.4).toFixed(2)}px) brightness(${1 + 0.6 * A})`;
+    } else from.style.visibility = "hidden";
+    if (p >= split) {
+      const e = easeOutExpo(v);
+      to.style.opacity = "1"; to.style.transform = `scale(${1 + 0.22 * (1 - e)})`; to.style.filter = `blur(${(6 * (1 - e)).toFixed(2)}px) brightness(${1 + 0.45 * (1 - e)})`;
+    } else to.style.opacity = "0";
+    ctx.lineCap = "round";
+    for (const s of STARS) {
+      const d0 = s.d * maxR, out = d0 * (1 + dist * 14 * s.z), tail = out / (1 + speed * 4.2 * s.z);
+      if (out > maxR * 1.05) continue;
+      ctx.strokeStyle = `rgba(232,238,240,${clamp(0.25 + speed * 0.75, 0, 1) * (0.4 + s.z * 0.6)})`;
+      ctx.lineWidth = 0.6 + s.z * 1.6;
+      ctx.beginPath(); ctx.moveTo(cx + Math.cos(s.a) * tail, cy + Math.sin(s.a) * tail); ctx.lineTo(cx + Math.cos(s.a) * out, cy + Math.sin(s.a) * out); ctx.stroke();
+    }
+    const flash = Math.max(0, 1 - Math.abs(p - split) / 0.09);        // the jump itself
+    if (flash > 0) { ctx.fillStyle = `rgba(244,246,248,${0.92 * flash})`; ctx.fillRect(0, 0, W, H); }
+  },
+  end() { from.style.visibility = ""; to.style.opacity = ""; },
+};
+
+/* 3. BLAST DOORS: the old wallpaper is cut into slats that part from the centre like the picker's own door, middle slats first. */
+const ROWS = 9;
+FX.doors = {
+  label: "BLAST DOORS", dur: 1000, slats: [],
+  start() {
+    bandsEl.textContent = ""; this.slats = [];
+    const rh = H / ROWS, bg = from.style.backgroundImage;  // each slat shows its own slice of the full-screen image
+    for (let i = 0; i < ROWS; i++) {
+      const d = Math.abs(i - (ROWS - 1) / 2) / ((ROWS - 1) / 2);
+      for (const side of [0, 1]) {
+        const el = document.createElement("i");
+        el.style.cssText = `left:${side ? "50%" : "0"};width:50%;top:${(i * rh).toFixed(1)}px;height:${(rh + 1).toFixed(1)}px;background-image:${bg};`;
+        el.style.backgroundSize = `${W}px ${H}px`; el.style.backgroundPosition = `${side ? -W / 2 : 0}px ${-i * rh}px`;
+        bandsEl.appendChild(el); this.slats.push({ el, d, side });
+      }
+    }
+    from.style.visibility = "hidden"; to.style.visibility = "visible";
+  },
+  render(p) {
+    const lag = 0.3;
+    for (const s of this.slats) {
+      const e = easeInOutQuart(clamp((p - s.d * lag) / (1 - lag)));
+      s.el.style.transform = `translateX(${(s.side ? 1 : -1) * 100.5 * e}%)`;
+    }
+    const e2 = easeOutCubic(p);
+    to.style.transform = `scale(${1 + 0.04 * (1 - e2)})`; to.style.filter = `brightness(${0.55 + 0.45 * e2})`;
+  },
+  end() { bandsEl.textContent = ""; this.slats = []; from.style.visibility = ""; },
+};
+
+/* 4. TACTICAL SCAN: a scan line sweeps left to right; the new wallpaper is already there behind it. */
+FX.scan = {
+  label: "TACTICAL SCAN", dur: 900,
+  start() { to.style.clipPath = "inset(0 100% 0 0)"; },
+  render(p) {
+    clearFx();
+    const x = W * easeInOutCubic(p), trail = 150;
+    to.style.clipPath = `inset(0 ${Math.max(0, W - x).toFixed(1)}px 0 0)`;
+    if (p >= 1) return;
+    const g = ctx.createLinearGradient(x - trail, 0, x, 0);
+    g.addColorStop(0, "rgba(236,240,238,0)"); g.addColorStop(1, "rgba(236,240,238,0.16)");
+    ctx.fillStyle = g; ctx.fillRect(Math.max(0, x - trail), 0, Math.min(trail, x), H);
+    ctx.fillStyle = "rgba(5,5,5,0.22)";                                       // raster lines inside the trail, fading out
+    for (let y = 0; y < H; y += 3) {
+      const a = ctx.createLinearGradient(x - trail, 0, x, 0);
+      a.addColorStop(0, "rgba(5,5,5,0)"); a.addColorStop(1, "rgba(5,5,5,0.26)");
+      ctx.fillStyle = a; ctx.fillRect(Math.max(0, x - trail), y, Math.min(trail, x), 1);
+    }
+    ctx.fillStyle = "rgba(244,246,248,0.95)"; ctx.fillRect(Math.round(x) - 1, 0, 1.5, H);
+    ctx.fillStyle = "rgba(244,246,248,0.85)";                                 // ticks on the line
+    for (let y = 0; y < H; y += 24) ctx.fillRect(Math.round(x) + 1, y, y % 96 === 0 ? 14 : 7, 1);
+    ctx.font = "500 10px Orbitron, Geist, sans-serif"; ctx.textBaseline = "top";
+    ctx.fillText(`X ${String(Math.round(x)).padStart(4, "0")}`, Math.round(x) + 22, 44);
+  },
+  end() { clearFx(); },
+};
+
+/* reduced motion: every effect becomes a short crossfade */
+const FADE = { label: "FADE", dur: 260, start() { to.style.opacity = "0"; }, render(p) { to.style.opacity = String(p); }, end() { to.style.opacity = ""; } };
+
+/* ---------- transition engine ---------- */
+let base = 0;            // wallpaper drawn on `from`
+let active = null;       // { fx, to, t0 }
+let raf = 0;
+
+function resetLayers() {
+  to.style.clipPath = ""; to.style.transform = ""; to.style.filter = ""; to.style.opacity = ""; to.style.visibility = "hidden";
+  from.style.transform = ""; from.style.filter = ""; from.style.visibility = "";
+}
+function finish() {
+  if (!active) return;
+  cancelAnimationFrame(raf);
+  active.fx.render(1); active.fx.end();
+  base = active.to; setBg(from, base);
+  active = null; resetLayers(); clearFx();
+}
+function go(idx, freezeAt) {
+  if (active) finish();
+  if (idx === base) return;
+  const fx = reduced ? FADE : FX[state.fx];
+  setBg(to, idx); resetLayers(); to.style.visibility = "visible";
+  active = { fx, to: idx, t0: performance.now() };
+  fx.start();
+  if (freezeAt != null) { fx.render(freezeAt); return; }
+  const tick = now => {
+    if (!active) return;
+    const p = clamp((now - active.t0) / fx.dur);
+    fx.render(p);
+    if (p >= 1) finish(); else raf = requestAnimationFrame(tick);
+  };
+  fx.render(0); raf = requestAnimationFrame(tick);
+}
+
+/* ---------- picker state ---------- */
+const state = { fx: FX_ORDER.includes(q.get("effect")) ? q.get("effect") : "laser", sel: 0, committed: 0, open: false };
+const door = $("door"), rail = $("rail"), lamps = $("lamps"), fxbtn = $("fxbtn"), fxname = $("fxname");
+const FX_LABEL = { laser: "SUPERLASER", hyperspace: "HYPERSPACE", doors: "BLAST DOORS", scan: "TACTICAL SCAN" };
+const thumbs = WALLS.map((w, i) => {
+  const t = document.createElement("div"); t.className = "thumb"; t.style.backgroundImage = `url("${w.url}")`; t.setAttribute("role", "option");
+  t.addEventListener("click", () => choose(i)); rail.appendChild(t); return t;
+});
+WALLS.forEach(() => lamps.appendChild(document.createElement("i")));
+
+/* x offsets (design px), scale and opacity by distance from the selected plate; farther plates are parked invisible */
+const SLOT = { 0: [0, 1, 1], 1: [310, 0.6, 0.95], 2: [505, 0.4, 0.5] };
+function layout(opening) {
+  thumbs.forEach((t, i) => {
+    let off = mod(i - state.sel + Math.floor(N / 2), N) - Math.floor(N / 2);
+    const a = Math.abs(off), [x, sc, op] = SLOT[a] || [700, 0.3, 0], dir = Math.sign(off) || 1;
+    t.style.transform = `translate(calc(-50% + var(--u) * ${dir * x}), -50%) scale(${sc})`;
+    t.style.opacity = op;
+    t.style.zIndex = 10 - a;
+    t.classList.toggle("cur", off === 0);
+    t.style.transitionDelay = opening ? `${a * 70}ms` : "0ms";
+  });
+  [...lamps.children].forEach((l, i) => l.classList.toggle("on", i === state.sel));
+  $("name").textContent = WALLS[state.sel].name.toUpperCase();
+  $("meta").textContent = WALLS[state.sel].meta;
+}
+let shownFx = null;
+function markTab(dir = 1) {                   // the name slides out, the new one slides in from the other side
+  if (shownFx === state.fx) return;
+  const first = shownFx === null; shownFx = state.fx;
+  if (first || reduced) { fxname.textContent = FX_LABEL[state.fx]; return; }
+  fxname.classList.add("out"); fxname.style.transform = `translateY(${-dir * 7}px)`;
+  setTimeout(() => {
+    fxname.textContent = FX_LABEL[state.fx];
+    fxname.style.transition = "none"; fxname.style.transform = `translateY(${dir * 7}px)`; void fxname.offsetWidth;
+    fxname.style.transition = ""; fxname.classList.remove("out"); fxname.style.transform = "";
+  }, 80);
+}
+
+function choose(i) {                          // pick a wallpaper: the desktop behind changes live
+  state.sel = mod(i, N); layout(false); go(state.sel);
+}
+function setEffect(f) {                       // pick an effect: it applies to the next wallpaper change, the desktop is not touched
+  const d = (FX_ORDER.indexOf(f) - FX_ORDER.indexOf(state.fx) + FX_ORDER.length) % FX_ORDER.length === 1 ? 1 : -1;
+  state.fx = f; markTab(d);
+}
+function openDoor(instant) {
+  state.open = true; state.sel = state.committed;
+  if (instant) door.style.transition = "none";
+  layout(true); markTab();
+  document.body.classList.add("open");
+  if (instant) { requestAnimationFrame(() => (door.style.transition = "")); }
+}
+function closeDoor() { state.open = false; document.body.classList.remove("open"); }
+function apply() { state.committed = state.sel; door.classList.add("applied"); setTimeout(() => door.classList.remove("applied"), 400); closeDoor(); }
+function cancel() { if (state.sel !== state.committed) { state.sel = state.committed; go(state.committed); } closeDoor(); }
+
+addEventListener("keydown", e => {
+  if (e.ctrlKey && e.shiftKey && e.key.toLowerCase() === "b") { e.preventDefault(); state.open ? cancel() : openDoor(); return; }
+  if (!state.open) { if (e.key.toLowerCase() === "b" && !e.ctrlKey && !e.metaKey) openDoor(); return; }
+  const k = e.key;
+  if (k === "ArrowRight") choose(state.sel + 1);
+  else if (k === "ArrowLeft") choose(state.sel - 1);
+  else if (k === "ArrowDown") setEffect(FX_ORDER[mod(FX_ORDER.indexOf(state.fx) + 1, FX_ORDER.length)]);
+  else if (k === "ArrowUp") setEffect(FX_ORDER[mod(FX_ORDER.indexOf(state.fx) - 1, FX_ORDER.length)]);
+  else if (k === "Enter") apply();
+  else if (k === "Escape") cancel();
+  else return;
+  e.preventDefault();
+});
+fxbtn.addEventListener("click", () => setEffect(FX_ORDER[mod(FX_ORDER.indexOf(state.fx) + 1, FX_ORDER.length)]));
+// scrolling: over the effect button it changes the effect, over the bay it changes the wallpaper (down is forward)
+let wheelAcc = 0;
+function wheelSteps(e) { wheelAcc += e.deltaY; let n = 0; while (wheelAcc >= 100) { n++; wheelAcc -= 100; } while (wheelAcc <= -100) { n--; wheelAcc += 100; } return n; }
+fxbtn.addEventListener("wheel", e => { e.preventDefault(); const n = wheelSteps(e); for (let i = 0; i < Math.abs(n); i++) setEffect(FX_ORDER[mod(FX_ORDER.indexOf(state.fx) + Math.sign(n), FX_ORDER.length)]); }, { passive: false });
+document.querySelector(".bay").addEventListener("wheel", e => { e.preventDefault(); const n = wheelSteps(e); for (let i = 0; i < Math.abs(n); i++) choose(state.sel + Math.sign(n)); }, { passive: false });
+$("scrim").addEventListener("click", cancel);
+
+/* ---------- boot ---------- */
+setBg(from, 0);
+layout(false); markTab();
+document.fonts && document.fonts.ready.then(() => markTab());
+if (q.get("open") || q.get("freeze") != null) {                              // deterministic states for screenshots
+  document.body.classList.add("noanim");
+  openDoor(false);
+  if (q.get("freeze") != null) { state.sel = 1; layout(false); addEventListener("load", () => go(1, parseFloat(q.get("freeze")))); }
+  if (q.get("seal") != null) {                                              // freeze the leaves part-way (0 = closed, 1 = open)
+    const k = parseFloat(q.get("seal")) * 101;
+    document.querySelector(".leaf.l").style.transform = `translateX(${-k}%)`; document.querySelector(".leaf.r").style.transform = `translateX(${k}%)`;
+    document.querySelector(".lock").style.opacity = k > 20 ? "0" : "1";
+    if (k < 101) document.querySelector(".light").style.opacity = String(k / 101);
+  } else setTimeout(() => document.body.classList.remove("noanim"), 400);
+}
+</script>
+</body>
+</html>

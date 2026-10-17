@@ -1,0 +1,462 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>TK-421 · Lock screen</title>
+<style>
+  /* Palette: Imperial Destroyer profile (TK421.md §24). Fonts: Orbitron for command
+     identity, Geist for general UI (§12). Installed system fonts, no web loading. */
+  :root {
+    color-scheme: dark;
+    --bg: #050505;
+    --surface: #0c0b0d;
+    --surface-alt: #1a1a21;
+    --text: #e8e6e3;
+    --muted: #8e8b88;
+    --accent: #506a9b;
+    --accent-dim: #29384f;
+    --danger: #a14d55;
+    --danger-text: #d9808a;      /* danger hue lifted for text contrast */
+    --border: #3f3e44;
+
+    --card-w: min(420px, calc(100vw - 32px));
+    --badge: 64px;
+    --radius: 2px;
+    --ease: cubic-bezier(0.16, 1, 0.3, 1);
+    --display: "Orbitron", "Geist", ui-sans-serif, sans-serif;
+    --ui: "Geist", ui-sans-serif, system-ui, sans-serif;
+  }
+
+  * { box-sizing: border-box; margin: 0; }
+  html, body { height: 100%; background: var(--bg); }
+  body {
+    font-family: var(--ui);
+    color: var(--text);
+    overflow: hidden;
+    -webkit-font-smoothing: antialiased;
+  }
+  ::selection { background: var(--accent-dim); color: var(--text); }
+
+  /* ---------- background ---------- */
+  .bg {
+    position: fixed; inset: -60px;
+    background: url("wallpaper.jpg") center / cover no-repeat;
+    filter: blur(0) saturate(1) brightness(1);
+    transition: filter 1100ms var(--ease);
+  }
+  .locked .bg { filter: blur(14px) saturate(0.8) brightness(0.5); }
+  .locked.revealing .bg { filter: blur(0) saturate(1) brightness(1); }
+  .instant .bg { transition: none; }
+
+  .vignette {
+    position: fixed; inset: 0; pointer-events: none;
+    background: radial-gradient(ellipse at center, transparent 40%, rgba(5, 5, 5, 0.75) 100%);
+    opacity: 0; transition: opacity 1100ms var(--ease);
+  }
+  .locked .vignette { opacity: 1; }
+  .locked.revealing .vignette { opacity: 0; }
+  .instant .vignette { transition: none; }
+
+  /* ---------- card ---------- */
+  .card {
+    position: fixed; left: 50%; top: 50%;
+    width: var(--badge); height: var(--badge);
+    transform: translate(-50%, -50%);
+    background: rgba(12, 11, 13, 0.94);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    box-shadow: 0 28px 70px -14px rgba(0, 0, 0, 0.85), 0 2px 8px rgba(0, 0, 0, 0.5);
+    overflow: hidden;
+    opacity: 0;
+  }
+
+  /* targeting-frame corners, drawn inside the card so the door animation clips them cleanly */
+  .card::after {
+    content: ""; position: absolute; inset: 8px; pointer-events: none;
+    --c: var(--accent);
+    background:
+      linear-gradient(var(--c), var(--c)) top left / 12px 1px,
+      linear-gradient(var(--c), var(--c)) top left / 1px 12px,
+      linear-gradient(var(--c), var(--c)) top right / 12px 1px,
+      linear-gradient(var(--c), var(--c)) top right / 1px 12px,
+      linear-gradient(var(--c), var(--c)) bottom left / 12px 1px,
+      linear-gradient(var(--c), var(--c)) bottom left / 1px 12px,
+      linear-gradient(var(--c), var(--c)) bottom right / 12px 1px,
+      linear-gradient(var(--c), var(--c)) bottom right / 1px 12px;
+    background-repeat: no-repeat;
+    opacity: 0; transition: opacity 500ms var(--ease) 250ms;
+  }
+  .open .card::after { opacity: 0.85; }
+  .instant .card::after { transition: none; }
+
+  .lock-icon {
+    position: absolute; inset: 0;
+    display: grid; place-items: center;
+    color: var(--text);
+  }
+  .lock-icon svg { width: 26px; height: 26px; }
+  .lock-icon .shackle {
+    transform-box: fill-box; transform-origin: 100% 100%;
+    transition: transform 420ms var(--ease);
+  }
+  .lock-icon.open .shackle { transform: translateY(-2px) rotate(28deg); }
+  .lock-icon .led {
+    position: absolute; top: 9px; right: 9px;
+    width: 5px; height: 5px; background: var(--danger);
+    transition: background-color 300ms var(--ease);
+  }
+  .lock-icon.open .led { background: var(--accent); }
+
+  .content {
+    position: absolute; top: 0; left: 50%;
+    width: var(--card-w);
+    transform: translateX(-50%);
+    padding-top: 40px;
+    display: flex; flex-direction: column; align-items: center;
+    opacity: 0; pointer-events: none;
+  }
+  .open .content { pointer-events: auto; }
+  .main { width: 100%; padding: 0 32px; display: flex; flex-direction: column; align-items: center; }
+
+  /* ---------- clock + date ---------- */
+  .clock {
+    font-family: var(--display);
+    font-size: min(4.5rem, 10vh);
+    line-height: 1;
+    font-weight: 500;
+    letter-spacing: 0.02em;
+    font-variant-numeric: tabular-nums;
+  }
+  .date {
+    margin-top: 14px;
+    font-family: var(--display);
+    font-size: 0.6875rem;
+    font-weight: 500;
+    letter-spacing: 0.22em;
+    text-transform: uppercase;
+    color: var(--muted);
+  }
+
+  /* ---------- identity ---------- */
+  .avatar {
+    margin-top: min(32px, 4vh);
+    width: min(84px, 10.5vh); height: min(84px, 10.5vh);
+    display: grid; place-items: center;
+    background: var(--surface-alt);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    color: var(--text);
+  }
+  .avatar svg { width: 74%; height: 74%; }
+  .user {
+    margin-top: 12px;
+    font-family: var(--display);
+    font-size: 0.8125rem; font-weight: 500; letter-spacing: 0.18em;
+  }
+
+  /* ---------- password ---------- */
+  form { width: 100%; margin-top: min(26px, 3.5vh); }
+  .field {
+    display: flex; align-items: center; gap: 10px;
+    height: 50px;
+    padding: 0 7px 0 14px;
+    border-radius: var(--radius);
+    background: var(--surface-alt);
+    border: 1px solid var(--border);
+    color: var(--muted);
+    transition: border-color 160ms var(--ease);
+  }
+  .field:hover { border-color: #55545c; }
+  .field:focus-within {
+    border-color: var(--accent);
+    outline: 2px solid var(--accent-dim);
+    outline-offset: 2px;
+  }
+  .field svg.lead { width: 17px; height: 17px; flex: none; }
+  .field input {
+    flex: 1; min-width: 0; height: 100%;
+    background: transparent; border: 0; outline: 0;
+    color: var(--text);
+    caret-color: var(--accent);
+    font: 400 1rem var(--ui);
+    letter-spacing: 0.14em;
+  }
+  .field input::placeholder { color: var(--muted); letter-spacing: 0.02em; opacity: 1; }
+  .field input:-webkit-autofill { -webkit-text-fill-color: var(--text); transition: background-color 9999s; }
+
+  .go {
+    flex: none; width: 36px; height: 36px;
+    border-radius: var(--radius); border: 0; cursor: pointer;
+    display: grid; place-items: center;
+    background: var(--text); color: var(--bg);
+    transform: scale(0.7); opacity: 0; pointer-events: none;
+    transition: transform 200ms var(--ease), opacity 160ms var(--ease);
+  }
+  .go svg { width: 18px; height: 18px; }
+  .has-text .go { transform: scale(1); opacity: 1; pointer-events: auto; }
+  .go:hover { background: #fff; }
+  .go:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+
+  .checking .go svg { display: none; }
+  .checking .go::after {
+    content: ""; width: 16px; height: 16px; border-radius: 50%;
+    border: 2px solid rgba(5, 5, 5, 0.25); border-top-color: var(--bg);
+    animation: spin 700ms linear infinite;
+  }
+  @keyframes spin { to { transform: rotate(360deg); } }
+
+  .shake { animation: shake 420ms var(--ease); }
+  @keyframes shake {
+    0%, 100% { transform: translateX(0); }
+    20% { transform: translateX(-9px); }
+    40% { transform: translateX(8px); }
+    60% { transform: translateX(-5px); }
+    80% { transform: translateX(3px); }
+  }
+  .error .field { border-color: var(--danger); }
+
+  .state {
+    margin-top: 12px; min-height: 1.25rem;
+    font-size: 0.875rem; text-align: center; color: var(--muted);
+  }
+  .state[data-kind="error"] { color: var(--danger-text); }
+  .state[data-kind="warn"] { color: var(--text); }
+
+  /* ---------- status readout ---------- */
+  .status {
+    width: 100%; margin-top: 18px;
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 13px 20px;
+    border-top: 1px solid var(--border);
+    font-family: var(--display);
+    font-size: 0.6875rem; font-weight: 500; letter-spacing: 0.2em;
+    text-transform: uppercase; color: var(--muted);
+  }
+  .status .led-word { display: inline-flex; align-items: center; gap: 9px; color: var(--text); }
+  .status .dot { width: 6px; height: 6px; background: var(--danger); transition: background-color 250ms var(--ease); }
+  .status[data-s="verifying"] .dot { background: var(--muted); animation: blink 700ms steps(2) infinite; }
+  .status[data-s="authorized"] .dot { background: var(--accent); }
+  @keyframes blink { 50% { opacity: 0.25; } }
+
+  /* ---------- after unlock ---------- */
+  .relock {
+    position: fixed; left: 50%; top: 50%; transform: translate(-50%, -50%);
+    padding: 12px 20px;
+    background: rgba(12, 11, 13, 0.94); color: var(--text);
+    border: 1px solid var(--border); border-radius: var(--radius);
+    font: 500 0.6875rem var(--display); letter-spacing: 0.22em; text-transform: uppercase;
+    cursor: pointer;
+    opacity: 0; pointer-events: none;
+    transition: opacity 300ms var(--ease);
+  }
+  .relock kbd { font: inherit; color: var(--muted); }
+  .relock:hover { border-color: var(--accent); }
+  .relock:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+  .unlocked .relock { opacity: 1; pointer-events: auto; }
+
+  .hint {
+    position: fixed; left: 16px; right: 16px; bottom: 14px;
+    text-align: center;
+    font-size: 0.75rem; color: rgba(232, 230, 227, 0.62);
+  }
+  .hint kbd { font: inherit; color: var(--text); }
+
+  @media (prefers-reduced-motion: reduce) {
+    .bg, .vignette, .field, .go, .relock { transition-duration: 1ms; }
+    .shake { animation: none; }
+  }
+</style>
+</head>
+<body>
+
+<div class="bg" aria-hidden="true"></div>
+<div class="vignette" aria-hidden="true"></div>
+
+<section class="card" id="card" aria-label="Lock screen">
+  <div class="lock-icon" id="lockIcon" aria-hidden="true">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="square" stroke-linejoin="miter"><rect x="4.5" y="10.5" width="15" height="10"/><path class="shackle" d="M8 10.5V8a4 4 0 0 1 8 0v2.5"/></svg>
+    <span class="led"></span>
+  </div>
+
+  <div class="content" id="content">
+    <div class="main">
+      <div class="clock" id="clock">00:00</div>
+      <div class="date" id="date"></div>
+
+      <div class="avatar" aria-hidden="true">
+        <!-- stormtrooper helmet, authored line icon -->
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.35" stroke-linecap="square" stroke-linejoin="miter"><path d="M5.5 12.5C5.5 8 8.3 4.5 12 4.5s6.5 3.5 6.5 8v3.2L15.8 19h-1.6l-.9 1.5h-2.6l-.9-1.5H8.2L5.5 15.7z"/><path d="M7.4 10.6l3.4.9-.6 2.5-2.9-.7zM16.6 10.6l-3.4.9.6 2.5 2.9-.7z"/><path d="M12 12.8v2.2M10.2 17.2h3.6"/></svg>
+      </div>
+      <div class="user">TK-421</div>
+
+      <form id="form" autocomplete="off">
+        <div class="field" id="field">
+          <svg class="lead" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="square" stroke-linejoin="miter" aria-hidden="true"><rect x="4.5" y="10.5" width="15" height="10"/><path d="M8 10.5V8a4 4 0 0 1 8 0v2.5"/></svg>
+          <input id="pw" type="password" placeholder="Password" aria-label="Password" autocomplete="current-password" spellcheck="false">
+          <button class="go" id="go" type="submit" aria-label="Unlock">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="square" stroke-linejoin="miter" aria-hidden="true"><path d="M5 12h14M13 6l6 6-6 6"/></svg>
+          </button>
+        </div>
+        <p class="state" id="state" role="status" aria-live="polite"></p>
+      </form>
+    </div>
+
+    <div class="status" id="status" data-s="locked">
+      <span class="led-word"><span class="dot"></span><span id="statusWord">Locked</span></span>
+      <span>tk421</span>
+    </div>
+  </div>
+</section>
+
+<button class="relock" id="relock" type="button">Lock · <kbd>L</kbd></button>
+
+<p class="hint">Prototype · test password <kbd>Senha123</kbd> · press <kbd>L</kbd> to lock again</p>
+
+<script>
+(() => {
+  if (location.hash === '#instant') document.documentElement.classList.add('instant');
+  const $ = id => document.getElementById(id);
+  const body = document.body, card = $('card'), content = $('content'), lockIcon = $('lockIcon');
+  const pw = $('pw'), field = $('field'), form = $('form'), state = $('state'), status = $('status');
+  const instant = location.hash === '#instant';
+  const reduce = matchMedia('(prefers-reduced-motion: reduce)').matches || instant;
+  const EASE = 'cubic-bezier(0.16, 1, 0.3, 1)';
+  const BADGE = 64;
+  const t = ms => reduce ? 1 : ms;
+  const sleep = ms => new Promise(r => setTimeout(r, ms));
+
+  let busy = false, capsOn = false;
+
+  /* ---- clock + date ---- */
+  function tick() {
+    const n = new Date();
+    $('clock').textContent = n.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' });
+    const wd = n.toLocaleDateString('en-US', { weekday: 'long' });
+    const mon = n.toLocaleDateString('en-US', { month: 'short' });
+    $('date').textContent = `${wd} • ${n.getDate()} ${mon}`;
+  }
+  tick(); setInterval(tick, 1000);
+
+  /* ---- messages + status readout ---- */
+  const STATUS = { locked: 'Locked', verifying: 'Verifying', denied: 'Denied', authorized: 'Authorized' };
+  function setStatus(s) {
+    status.dataset.s = s === 'denied' ? 'locked' : s;
+    $('statusWord').textContent = STATUS[s];
+  }
+  function say(text, kind = '') { state.textContent = text; state.dataset.kind = kind; }
+  function idleMessage() { capsOn ? say('Caps Lock is on', 'warn') : say(''); }
+
+  const openSize = () => ({ w: Math.min(420, innerWidth - 32), h: content.offsetHeight });
+
+  /* ---- lock: badge appears, then the door opens (wide first, then tall) ---- */
+  async function lock() {
+    body.className = 'locked';
+    busy = true;
+    pw.value = ''; pw.disabled = false;
+    form.classList.remove('has-text', 'checking', 'error');
+    setStatus('locked'); say('');
+    const { w, h } = openSize();
+
+    [card, content, lockIcon].forEach(el => el.getAnimations().forEach(a => a.cancel()));
+    lockIcon.classList.remove('open');
+    card.style.cssText = '';
+
+    if (instant) {
+      Object.assign(card.style, { width: w + 'px', height: h + 'px', opacity: 1 });
+      content.style.opacity = 1; lockIcon.style.opacity = 0;
+      body.classList.add('open'); busy = false;
+      return;
+    }
+
+    await card.animate([{ opacity: 0, transform: 'translate(-50%,-50%) scale(0.8)' },
+                        { opacity: 1, transform: 'translate(-50%,-50%) scale(1)' }],
+      { duration: t(380), easing: EASE, fill: 'forwards' }).finished;
+
+    const door = card.animate([
+      { width: BADGE + 'px', height: BADGE + 'px' },
+      { width: w + 'px', height: BADGE + 'px', offset: 0.45 },
+      { width: w + 'px', height: h + 'px' }],
+      { duration: t(850), easing: EASE, fill: 'forwards' });
+    lockIcon.animate([{ opacity: 1 }, { opacity: 0 }], { duration: t(260), delay: t(120), easing: EASE, fill: 'forwards' });
+    content.animate([{ opacity: 0 }, { opacity: 1 }], { duration: t(450), delay: t(420), easing: EASE, fill: 'forwards' });
+    await door.finished;
+
+    card.style.width = w + 'px'; card.style.height = h + 'px'; card.style.opacity = 1;
+    body.classList.add('open');
+    busy = false;
+    pw.focus();
+  }
+
+  /* ---- unlock: door closes (tall first, then wide), padlock opens, desktop sharpens ---- */
+  async function unlock() {
+    body.classList.remove('open');
+    body.classList.add('revealing');
+    const { w, h } = openSize();
+    content.animate([{ opacity: 1 }, { opacity: 0 }], { duration: t(220), easing: EASE, fill: 'forwards' });
+    lockIcon.animate([{ opacity: 0 }, { opacity: 1 }], { duration: t(260), delay: t(420), easing: EASE, fill: 'forwards' });
+    setTimeout(() => lockIcon.classList.add('open'), t(760));
+    await card.animate([
+      { width: w + 'px', height: h + 'px' },
+      { width: w + 'px', height: BADGE + 'px', offset: 0.55 },
+      { width: BADGE + 'px', height: BADGE + 'px' }],
+      { duration: t(800), delay: t(120), easing: EASE, fill: 'forwards' }).finished;
+    await sleep(t(420));                      // let the open padlock read
+    await card.animate([
+      { opacity: 1, transform: 'translate(-50%,-50%) scale(1)' },
+      { opacity: 0, transform: 'translate(-50%,-50%) scale(0.8)' }],
+      { duration: t(360), easing: EASE, fill: 'forwards' }).finished;
+    body.className = 'unlocked';
+    $('relock').focus();
+  }
+
+  /* ---- mock authentication ---- */
+  form.addEventListener('submit', async e => {
+    e.preventDefault();
+    if (busy || !pw.value) return;
+    busy = true;
+    form.classList.add('checking');
+    setStatus('verifying'); say('Verifying…');
+    await sleep(reduce ? 1 : 650);
+    form.classList.remove('checking');
+
+    if (pw.value === 'Senha123') {
+      say(''); setStatus('authorized');
+      await sleep(t(380));
+      await unlock();
+    } else {
+      form.classList.add('error');
+      setStatus('denied'); say('Authentication failed. Try again.', 'error');
+      field.classList.remove('shake'); void field.offsetWidth; field.classList.add('shake');
+      pw.value = ''; form.classList.remove('has-text');
+      busy = false; pw.focus();
+    }
+  });
+
+  pw.addEventListener('input', () => {
+    form.classList.toggle('has-text', pw.value.length > 0);
+    if (form.classList.contains('error')) { form.classList.remove('error'); setStatus('locked'); idleMessage(); }
+  });
+
+  const syncCaps = e => {
+    if (!e.getModifierState) return;
+    capsOn = e.getModifierState('CapsLock');
+    if (!form.classList.contains('error') && !form.classList.contains('checking')) idleMessage();
+  };
+  addEventListener('keydown', syncCaps); addEventListener('keyup', syncCaps);
+
+  $('relock').addEventListener('click', lock);
+  addEventListener('keydown', e => {
+    if (e.key.toLowerCase() !== 'l' || e.ctrlKey || e.metaKey || e.altKey) return;
+    if (body.classList.contains('unlocked')) lock();   // while locked the card is visible and "l" is just a letter
+  });
+  addEventListener('resize', () => {
+    if (!body.classList.contains('open')) return;
+    const { w, h } = openSize(); card.style.width = w + 'px'; card.style.height = h + 'px';
+  });
+
+  if (instant) lock(); else document.fonts.ready.then(lock);
+})();
+</script>
+</body>
+</html>

@@ -1,0 +1,968 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>TK-421 · Toolbar (flat)</title>
+<style>
+  /* Palette: Imperial Destroyer profile (TK421.md §24). Orbitron for labels and digits, Geist for UI (§12).
+     Motion is lifted from the Dynamic Island prototype: same easing, 520/340 ms morphs, content fades in after 140 ms.
+     Full toolbar: network, Bluetooth, notifications and power, each with a light dropdown that unrolls from the capsule
+     into one shared slot. The notifications part is the approved prototypes/notifications/index.html. */
+  :root {
+    color-scheme: dark;
+    --bg: #050505;
+    --surface: #0c0b0d;
+    --surface-alt: #1a1a21;
+    --text: #e8e6e3;
+    --muted: #8e8b88;
+    --accent: #506a9b;
+    --accent-dim: #29384f;
+    --danger: #a14d55;
+    --danger-text: #d9808a;
+    --border: #3f3e44;
+
+    --idle-w: 108px;   --idle-h: 28px;
+    --toast-w: 360px;  --toast-h: 58px;  --toast-xh: 58px;   /* --toast-xh is measured in JS on hover */
+    --ease: cubic-bezier(0.22, 1, 0.36, 1);
+    --dur-open: 520ms;
+    --dur-close: 340ms;
+    --display: "Orbitron", "Geist", ui-sans-serif, sans-serif;
+    --ui: "Geist", ui-sans-serif, system-ui, sans-serif;
+  }
+
+  * { box-sizing: border-box; margin: 0; }
+  html, body { height: 100%; background: var(--bg); }
+  body { font-family: var(--ui); color: var(--text); overflow: hidden; -webkit-font-smoothing: antialiased; }
+  ::selection { background: var(--accent-dim); color: var(--text); }
+  button { font: inherit; color: inherit; }
+  svg { display: block; fill: none; stroke: currentColor; stroke-width: 1.7; stroke-linecap: round; stroke-linejoin: round; }
+
+  .wall { position: fixed; inset: 0; background: url("wallpaper.jpg") center / cover no-repeat; filter: brightness(0.8); }
+
+  /* ---------- mock of the real bar (context only): capsules are 28 px high, 4 px from the top ---------- */
+  .cap {
+    position: fixed; top: 4px; height: 28px;
+    display: flex; align-items: center;
+    background: var(--surface); border: 1px solid var(--border); border-radius: 14px;
+  }
+  .cap.left { left: 30px; padding: 0 12px; gap: 10px; }
+  .cap.left i { width: 1px; height: 12px; background: var(--border); }
+  .m { display: flex; gap: 5px; font: 500 10px/22px var(--display); letter-spacing: 0.4px; color: #b5bac3; }
+  .m b { font-weight: 500; color: var(--text); }
+  .m > * { position: relative; top: 1px; }          /* Orbitron digits sit ~1px high at this size */
+
+  /* ---------- the toolbar capsule (right). Only the bell is live in this prototype ---------- */
+  .cap.right { right: 30px; padding: 0 5px; gap: 2px; }
+  .tb {
+    position: relative; height: 22px; min-width: 24px; padding: 0 5px;
+    display: inline-flex; align-items: center; justify-content: center;
+    background: transparent; border: 0; border-radius: 8px; color: #b5bac3; cursor: default;
+    transition: color 140ms, background-color 140ms;
+  }
+  .tb svg { width: 14px; height: 14px; }
+  button.tb { cursor: pointer; }
+  button.tb:hover, button.tb[aria-expanded="true"] { color: var(--text); background: var(--surface-alt); }
+  button.tb:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+
+  .bell .i-off { display: none; }
+  .dnd .bell .i-bell { display: none; }
+  .dnd .bell .i-off { display: block; }
+  .count { margin-left: 5px; position: relative; top: 1px; font: 500 10px/14px var(--display); letter-spacing: 0.4px; color: var(--text); font-variant-numeric: tabular-nums; }
+  .count:empty { display: none; }
+  .dnd .count { color: var(--muted); }
+  .roll { display: inline-block; animation: roll 280ms var(--ease) both; }
+  @keyframes roll { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: none; } }
+
+  /* a single accent ring when something arrives */
+  .bell::after { content: ""; position: absolute; inset: -1px; border: 1px solid var(--accent); border-radius: 9px; opacity: 0; pointer-events: none; }
+  .bell.ping::after { animation: ping 900ms var(--ease); }
+  @keyframes ping { from { opacity: 0.9; transform: scale(1); } to { opacity: 0; transform: scale(1.5, 1.7); } }
+
+  /* ---------- the island: idle pill that morphs into the notification toast ---------- */
+  .island {
+    position: fixed; top: 4px; left: 50%;
+    width: var(--idle-w); height: var(--idle-h);
+    transform: translateX(-50%);
+    border-radius: calc(var(--idle-h) / 2);
+    background: var(--surface); border: 1px solid var(--border);
+    box-shadow: 0 1px 2px rgba(0, 0, 0, 0.5);
+    overflow: hidden;
+    transition: width var(--dur-close) var(--ease), height var(--dur-close) var(--ease),
+                border-radius var(--dur-close) var(--ease), border-color 200ms ease, box-shadow var(--dur-close) ease;
+  }
+  .hud .island { width: 250px; height: 44px; border-radius: 22px; transition-duration: var(--dur-open); }
+  .notify .island {
+    width: var(--toast-w); height: var(--toast-h); border-radius: 20px;
+    box-shadow: 0 12px 30px -12px rgba(0, 0, 0, 0.65);
+    transition-duration: var(--dur-open);
+  }
+  .notify.xpand .island { height: var(--toast-xh); }
+  .notify.crit .island { border-color: var(--danger); }
+
+  .time {
+    position: absolute; left: 50%; top: 7px;
+    transform: translateX(-50%) scale(0.5); transform-origin: center top;
+    font-family: var(--display); font-size: 30px; line-height: 1; font-weight: 500; letter-spacing: 0.04em;
+    font-variant-numeric: tabular-nums; white-space: nowrap;
+    transition: opacity 200ms ease;
+  }
+  .time .s { color: var(--muted); }
+  .notify .time, .hud .time { opacity: 0; }
+
+  /* HUD: a brief confirmation of a power action (a toast takes priority over it) */
+  .hud-content {
+    position: absolute; inset: 0; display: flex; align-items: center; gap: 12px; padding: 0 20px;
+    opacity: 0; pointer-events: none; transition: opacity 120ms ease;
+  }
+  .hud:not(.notify) .hud-content { opacity: 1; transition: opacity 240ms ease 120ms; }
+  .hud-content svg { width: 16px; height: 16px; flex: none; color: var(--text); }
+  .hud-label { font: 400 9px var(--display); letter-spacing: 0.18em; text-transform: uppercase; color: var(--muted); }
+  .hud-state { margin-left: auto; font-size: 13px; font-weight: 500; }
+
+  /* ---------- toast content: light. Icon, title and body; app name and time appear on hover ---------- */
+  .toast { position: absolute; inset: 0; opacity: 0; pointer-events: none; transition: opacity 120ms ease; }
+  .notify .toast { opacity: 1; pointer-events: auto; transition: opacity 280ms ease 120ms; cursor: default; }
+
+  .t-inner {
+    position: absolute; left: 0; right: 0; top: 0;
+    display: grid; grid-template-columns: 28px 1fr 24px; column-gap: 12px; align-items: start;
+    padding: 11px 12px 10px 18px;
+    animation: t-in 460ms var(--ease) both;
+  }
+  .t-inner.out { animation: t-out 200ms ease both; pointer-events: none; }
+  @keyframes t-in { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: none; } }
+  @keyframes t-out { to { opacity: 0; transform: translateY(-8px); } }
+  @keyframes fade { from { opacity: 0; } to { opacity: 1; } }
+
+  /* the app's own icon, no box around it */
+  .tile { flex: none; width: 28px; height: 28px; margin-top: 4px; display: grid; place-items: center; color: var(--text); }
+  .tile svg { width: 26px; height: 26px; }
+  .tile svg.app { stroke: none; }                    /* real app icons are filled, not stroked */
+  .tile.sm { width: 24px; height: 24px; margin-top: 2px; }
+  .tile.sm svg { width: 22px; height: 22px; }
+  .crit .tile { color: var(--danger-text); }
+
+  .t-main { min-width: 0; }
+  .t-head { display: none; align-items: baseline; justify-content: space-between; height: 14px; margin-bottom: 3px; }
+  .t-inner.x .t-head { display: flex; animation: fade 260ms ease both; }
+  .t-app { font: 400 9px/14px var(--display); letter-spacing: 0.18em; text-transform: uppercase; color: var(--muted); }
+  .t-time { font-size: 11px; color: var(--muted); font-variant-numeric: tabular-nums; }
+  .crit .t-app, .crit .t-time { color: var(--danger-text); }
+  .t-title { height: 20px; font-size: 13px; line-height: 20px; font-weight: 500; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .crit .t-title { color: var(--danger-text); }
+  .t-body {
+    margin-top: 1px; font-size: 12px; line-height: 16px; color: var(--muted);
+    overflow: hidden; display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 1;
+  }
+  .t-inner.x .t-body { -webkit-line-clamp: 3; }                          /* up to 3 lines, with an ellipsis, when the toast is hovered */
+  .t-actions { display: none; gap: 4px; margin: 8px 0 0 -10px; }
+  .t-inner.x .t-actions { display: flex; }
+
+  .t-x, .n-x {
+    width: 24px; height: 24px; display: grid; place-items: center; cursor: pointer;
+    background: transparent; color: var(--muted); border: 0; border-radius: 8px;
+    transition: opacity 160ms, color 140ms, background-color 140ms;
+  }
+  .t-x svg, .n-x svg { width: 11px; height: 11px; stroke-width: 1.8; }
+  .t-x:hover, .n-x:hover { color: var(--text); background: rgba(232, 230, 227, 0.08); }
+  .t-x:focus-visible, .n-x:focus-visible, .act:focus-visible, .ctl:focus-visible, .text-btn:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+  .t-x { opacity: 0; margin-top: 1px; }
+  .toast-hover .t-x, .t-x:focus-visible { opacity: 1; }
+
+  /* actions: quiet text buttons; the first one gets a thin accent outline */
+  .act {
+    height: 26px; padding: 0 10px; cursor: pointer;
+    background: transparent; color: var(--muted); border: 1px solid transparent; border-radius: 8px;
+    font: 400 9px var(--display); letter-spacing: 0.18em; text-transform: uppercase;
+    transition: color 140ms, border-color 140ms, background-color 140ms;
+  }
+  .act:hover { color: var(--text); background: rgba(232, 230, 227, 0.06); }
+  .act.main { color: var(--text); border-color: var(--accent); }
+  .act.main:hover { background: var(--accent-dim); }
+  .crit .act.main { color: var(--danger-text); border-color: var(--danger); }
+  .crit .act.main:hover { background: rgba(161, 77, 85, 0.18); }
+
+  /* auto-dismiss timer: a hairline that drains along the card's bottom edge */
+  .t-bar { position: absolute; left: 0; right: 0; bottom: 0; height: 1px; }
+  .t-bar i { display: block; height: 100%; background: var(--accent); opacity: 0.8; transform-origin: left; animation: drain linear forwards; }
+  .toast-hover .t-bar i { animation-play-state: paused; }
+  @keyframes drain { from { transform: scaleX(1); } to { transform: scaleX(0); } }
+
+  /* ---------- notification centre: unrolls from the toolbar capsule ---------- */
+  .panel {
+    --pw: 340px;
+    position: fixed; top: 40px; right: 30px; z-index: 5;
+    width: 240px; border-radius: 14px;
+    display: grid; grid-template-rows: 0fr;
+    background: var(--surface); border: 1px solid var(--border);
+    box-shadow: 0 1px 2px rgba(0, 0, 0, 0.5);
+    opacity: 0; visibility: hidden;
+    transition: grid-template-rows var(--dur-close) var(--ease), width var(--dur-close) var(--ease),
+                border-radius var(--dur-close) var(--ease), opacity 160ms ease 60ms, visibility 0s linear var(--dur-close),
+                box-shadow var(--dur-close) ease;
+  }
+  .panel.open {
+    width: var(--pw); border-radius: 20px; grid-template-rows: 1fr;
+    opacity: 1; visibility: visible;
+    box-shadow: 0 14px 36px -14px rgba(0, 0, 0, 0.7);
+    transition: grid-template-rows var(--dur-open) var(--ease), width var(--dur-open) var(--ease),
+                border-radius var(--dur-open) var(--ease), opacity 200ms ease, visibility 0s, box-shadow var(--dur-open) ease;
+  }
+  .p-clip { min-height: 0; overflow: hidden; border-radius: inherit; }
+  .p-inner {
+    width: calc(var(--pw) - 2px); margin-left: auto; padding: 0 16px 6px;
+    opacity: 0; transform: scale(0.97); transform-origin: top right;
+    transition: opacity 140ms ease, transform 140ms ease;
+  }
+  .panel.open .p-inner {
+    opacity: 1; transform: none;
+    transition: opacity 320ms ease 140ms, transform 520ms var(--ease) 140ms;
+  }
+
+  .p-head { display: flex; align-items: center; gap: 2px; height: 48px; padding-top: 2px; }
+  .p-title { font: 400 11px var(--display); letter-spacing: 0.2em; text-transform: uppercase; }
+  .p-new { flex: 1; margin-left: 8px; font-size: 11px; color: var(--muted); }
+  .ctl {
+    width: 28px; height: 28px; display: grid; place-items: center; cursor: pointer;
+    background: transparent; color: var(--muted); border: 0; border-radius: 8px;
+    transition: color 140ms, background-color 140ms;
+  }
+  .ctl svg { width: 14px; height: 14px; }
+  .ctl:hover { color: var(--text); background: rgba(232, 230, 227, 0.06); }
+  .ctl[aria-pressed="true"] { color: var(--text); background: var(--accent-dim); }
+  .text-btn {
+    height: 28px; padding: 0 8px; cursor: pointer;
+    background: transparent; color: var(--muted); border: 0; border-radius: 8px;
+    font: 400 9px var(--display); letter-spacing: 0.18em; text-transform: uppercase;
+    transition: opacity 160ms, color 140ms, background-color 140ms;
+  }
+  .text-btn:hover { color: var(--text); background: rgba(232, 230, 227, 0.06); }
+  .text-btn:disabled { opacity: 0.3; pointer-events: none; }
+
+  .strip { display: none; align-items: center; gap: 8px; height: 30px; font-size: 11px; color: var(--muted); }
+  .strip::before { content: ""; width: 5px; height: 5px; border-radius: 50%; background: var(--accent); flex: none; }
+  .dnd .strip { display: flex; }
+
+  .list { max-height: 392px; overflow-y: auto; overscroll-behavior: contain; scrollbar-width: thin; scrollbar-color: var(--border) transparent; margin: 0 -16px; padding: 0 16px; }
+  .day { padding: 12px 0 4px; font: 400 9px var(--display); letter-spacing: 0.2em; text-transform: uppercase; color: var(--muted); }
+
+  .n {
+    position: relative; overflow: hidden; margin: 0 -16px; padding: 10px 16px;
+    display: grid; grid-template-columns: 24px 1fr 24px; column-gap: 12px; align-items: start;
+    transition: background-color 120ms, height 300ms var(--ease), opacity 160ms ease, padding 300ms var(--ease);
+  }
+  .n:hover { background: rgba(232, 230, 227, 0.035); }
+  .n.fresh { animation: n-in 460ms var(--ease) both; }
+  @keyframes n-in { from { opacity: 0; transform: translateY(-10px); } to { opacity: 1; transform: none; } }
+  .n.leaving { height: 0 !important; opacity: 0; padding-top: 0; padding-bottom: 0; }
+  .n-head { display: flex; align-items: baseline; justify-content: space-between; height: 14px; }
+  .n-app { font: 400 9px/14px var(--display); letter-spacing: 0.18em; text-transform: uppercase; color: var(--muted); }
+  .unread .n-app::before { content: ""; display: inline-block; width: 5px; height: 5px; margin-right: 6px; vertical-align: 1px; border-radius: 50%; background: var(--accent); }
+  .n-time { font-size: 11px; color: var(--muted); font-variant-numeric: tabular-nums; }
+  .n-title { margin-top: 2px; font-size: 13px; line-height: 20px; font-weight: 500; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .n-body { font-size: 12px; line-height: 16px; color: var(--muted); overflow: hidden; display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; }
+  .n-actions { display: flex; gap: 4px; margin: 8px 0 0 -10px; }
+  .n.crit .n-app, .n.crit .n-time { color: var(--danger-text); }
+  .n.crit .n-title { color: var(--danger-text); }
+  .n-x { opacity: 0; }
+  .n:hover .n-x, .n-x:focus-visible { opacity: 1; }
+
+  .empty { padding: 40px 0 36px; display: flex; flex-direction: column; align-items: center; gap: 6px; color: var(--muted); font-size: 12px; text-align: center; }
+  .empty svg { width: 24px; height: 24px; margin-bottom: 8px; stroke-width: 1.3; }
+  .empty b { font-weight: 500; color: var(--text); font-size: 13px; }
+
+  /* ---------- shared pieces for the new dropdowns ---------- */
+  .panel[data-p="power"] { --pw: 260px; }
+  .panel[data-p="net"], .panel[data-p="bt"] { --pw: 320px; }
+  .p-list { padding-bottom: 6px; }
+  .sec { padding: 10px 0 4px; font: 400 9px var(--display); letter-spacing: 0.2em; text-transform: uppercase; color: var(--muted); }
+  .tb.off { color: #6d727b; }
+
+  .row {
+    position: relative; display: flex; align-items: center; gap: 12px; height: 40px; margin: 0 -16px; padding: 0 16px;
+    cursor: pointer; transition: background-color 120ms;
+  }
+  .row:hover { background: rgba(232, 230, 227, 0.035); }
+  .row > svg { width: 18px; height: 18px; color: var(--muted); flex: none; transition: color 140ms; }
+  .row:hover > svg { color: var(--text); }
+  .row.gap { margin-top: 8px; }
+  .r-label { flex: 1; min-width: 0; font-size: 13px; font-weight: 500; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .r-main { flex: 1; min-width: 0; display: flex; flex-direction: column; justify-content: center; }
+  .r-main .r-label { flex: none; line-height: 18px; }
+  .r-sub { font-size: 11px; line-height: 14px; color: var(--muted); white-space: nowrap; }
+  .r-hint { font: 400 9px var(--display); letter-spacing: 0.16em; text-transform: uppercase; color: var(--muted); }
+  .r-act { font: 400 9px var(--display); letter-spacing: 0.16em; text-transform: uppercase; color: var(--muted); opacity: 0; transition: opacity 140ms, color 140ms; }
+  .row:hover .r-act { opacity: 1; }
+  .dot { display: inline-block; width: 5px; height: 5px; margin-right: 6px; vertical-align: 1px; border-radius: 50%; background: var(--accent); }
+
+  /* power: destructive rows ask first */
+  .row.confirm { cursor: default; gap: 8px; }
+  .row.confirm > svg { color: var(--danger-text); }
+  .row.confirm .r-label { color: var(--danger-text); }
+  .row.confirm .act { height: 24px; padding: 0 8px; }
+  .row.confirm .act svg { width: 11px; height: 11px; stroke-width: 1.8; }
+  .row.confirm .act:not(.main) { padding: 0 6px; }
+  .row.confirm .act.main { color: var(--danger-text); border-color: var(--danger); }
+  .row.confirm .act.main:hover { background: rgba(161, 77, 85, 0.18); }
+  .cd { position: absolute; left: 16px; right: 16px; bottom: 0; height: 1px; }
+  .cd i { display: block; height: 100%; background: var(--danger); opacity: 0.8; transform-origin: left; animation: drain 5s linear forwards; }
+
+  /* switch: thin outline, accent when on */
+  .sw {
+    position: relative; width: 30px; height: 16px; flex: none; padding: 0; cursor: pointer;
+    border: 1px solid var(--border); border-radius: 8px; background: transparent;
+    transition: border-color 160ms, background-color 160ms;
+  }
+  .sw::after {
+    content: ""; position: absolute; top: 2px; left: 2px; width: 10px; height: 10px; border-radius: 50%;
+    background: var(--muted); transition: transform 200ms var(--ease), background-color 160ms;
+  }
+  .sw[aria-checked="true"] { border-color: var(--accent); background: var(--accent-dim); }
+  .sw[aria-checked="true"]::after { transform: translateX(14px); background: var(--text); }
+  .sw:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+  .p-head .sw { margin-left: 6px; margin-right: 2px; }
+
+  /* network: current connection */
+  .conn { display: flex; align-items: center; gap: 12px; padding: 6px 0 10px; }
+  .conn > svg { width: 26px; height: 26px; color: var(--text); flex: none; }
+  .conn.bad > svg { color: var(--muted); }
+  .c-name { font-size: 14px; font-weight: 500; line-height: 20px; }
+  .c-sub { font-size: 11px; line-height: 14px; color: var(--muted); }
+  .kv { display: flex; align-items: baseline; justify-content: space-between; height: 24px; font-size: 12px; color: var(--muted); }
+  .kv b { font: 500 11px var(--display); letter-spacing: 0.04em; color: var(--text); font-variant-numeric: tabular-nums; }
+  .p-actions { display: flex; gap: 4px; padding: 8px 0 4px; margin-left: -8px; }
+  .note { padding: 8px 0 6px; font-size: 11px; color: var(--muted); }
+  .sig { width: 16px; height: 16px; flex: none; }
+  .sig i { fill: currentColor; }
+  .ok { color: var(--accent); }
+  .join { display: flex; align-items: center; gap: 8px; margin: 0 -16px; padding: 4px 16px 10px 46px; }
+  .join input {
+    flex: 1; min-width: 0; height: 28px; padding: 0 2px; background: transparent; color: var(--text);
+    border: 0; border-bottom: 1px solid var(--border); font: 400 13px var(--ui); outline: 0; transition: border-color 140ms;
+  }
+  .join input:focus { border-bottom-color: var(--accent); }
+  .join .act { height: 26px; }
+
+  /* Bluetooth: empty state when off */
+  .empty .act { margin-top: 10px; }
+
+  /* ---------- flat toolbar (variant): loose, white, strong icons; a pipe between groups ---------- */
+  .cap.right.flat { background: transparent; border: 0; border-radius: 0; padding: 0; gap: 0; right: 24px; }
+  .flat .tb { height: 28px; min-width: 0; padding: 0 9px; gap: 7px; border-radius: 8px; color: #f4f2ef; }
+  .flat .tb svg { width: 17px; height: 17px; stroke-width: 2.2; filter: drop-shadow(0 1px 2px rgba(0, 0, 0, 0.55)); }
+  .flat button.tb:hover, .flat button.tb[aria-expanded="true"] { color: #fff; background: rgba(244, 242, 239, 0.10); }
+  .flat .tb.off { color: rgba(244, 242, 239, 0.42); }
+  .flat .sep { width: 1px; height: 15px; margin: 0 7px; flex: none; background: rgba(244, 242, 239, 0.6); }
+  .flat .lbl { font: 600 12px var(--ui); letter-spacing: 0.01em; text-shadow: 0 1px 2px rgba(0, 0, 0, 0.55); }
+  .flat .lbl:empty { display: none; }
+  .flat .count { margin-left: 0; color: #f4f2ef; font-weight: 600; text-shadow: 0 1px 2px rgba(0, 0, 0, 0.55); }
+  .flat .dnd .count, .dnd .flat .count { color: rgba(244, 242, 239, 0.55); }
+  .flat .bell::after { inset: 1px; }
+
+  .hint { position: fixed; left: 16px; right: 16px; bottom: 14px; text-align: center; font-size: 12px; color: rgba(232, 230, 227, 0.7); }
+  .hint kbd { font: inherit; color: var(--text); }
+
+  @media (max-width: 760px) { .cap.left { display: none; } .island { --toast-w: calc(100vw - 24px); } }
+  .static *, .static *::before, .static *::after { transition: none !important; animation: none !important; }   /* #hash screenshot states */
+  @media (prefers-reduced-motion: reduce) {
+    * { transition-duration: 1ms !important; transition-delay: 0ms !important; animation: none !important; }
+    .t-bar { display: none; }
+  }
+</style>
+</head>
+<body id="root">
+
+<div class="wall"></div>
+
+<div class="cap left" aria-hidden="true">
+  <span class="m"><span>CPU</span><b>6%</b></span><i></i>
+  <span class="m"><span>RAM</span><b>26%</b></span><i></i>
+  <span class="m"><span>GPU</span><b>26%</b></span>
+</div>
+
+<!-- Flat toolbar: no capsule. Loose white icons, a pipe between groups, a text status. Same dropdowns as the capsule version. -->
+<div class="cap right flat" id="toolbar">
+  <button class="tb bell" id="bell" type="button" aria-label="Notifications" aria-expanded="false" aria-controls="panel-notif">
+    <svg class="i-bell" viewBox="0 0 24 24"><path d="M6 17V11a6 6 0 0 1 12 0v6l1.5 2h-15zM10 21h4"/></svg>
+    <svg class="i-off" viewBox="0 0 24 24"><path d="M6 17V11a6 6 0 0 1 9-5.2M18 11v6l1.5 2H8M10 21h4M4 4l16 16"/></svg>
+    <span class="count" id="count"></span>
+  </button>
+  <i class="sep" aria-hidden="true"></i>
+  <button class="tb" id="btnBt" type="button" aria-label="Bluetooth" aria-expanded="false" aria-controls="panel-bt">
+    <svg viewBox="0 0 24 24"><path d="M7 7l10 10-5 4V3l5 4L7 17"/></svg><span class="lbl" id="btCount"></span>
+  </button>
+  <button class="tb" id="btnNet" type="button" aria-label="Network" aria-expanded="false" aria-controls="panel-net"><span id="netIcon"></span></button>
+  <button class="tb" id="btnPower" type="button" aria-label="Power" aria-expanded="false" aria-controls="panel-power">
+    <svg viewBox="0 0 24 24"><path d="M12 3v8M6.3 6.8a8 8 0 1 0 11.4 0"/></svg>
+  </button>
+</div>
+
+<div class="island" id="island">
+  <div class="time" id="time">00:00<span class="s">:00</span></div>
+  <div class="hud-content" id="hudContent" aria-live="polite"></div>
+  <div class="toast" id="toast" role="status" aria-live="polite">
+    <div class="t-bar" id="tbar"></div>
+  </div>
+</div>
+
+<section class="panel" id="panel-notif" data-p="notif" aria-label="Notifications">
+  <div class="p-clip">
+    <div class="p-inner">
+      <div class="p-head">
+        <div class="p-title">Notifications</div>
+        <div class="p-new" id="pNew"></div>
+        <button class="ctl" id="dndBtn" type="button" aria-pressed="false" aria-label="Do not disturb" title="Do not disturb">
+          <svg viewBox="0 0 24 24"><path d="M20 14.5A8 8 0 0 1 9.5 4a8 8 0 1 0 10.5 10.5z"/></svg>
+        </button>
+        <button class="text-btn" id="clearBtn" type="button">Clear</button>
+      </div>
+      <div class="strip">Do not disturb · popups muted, critical alerts still show</div>
+      <div class="list" id="list"></div>
+    </div>
+  </div>
+</section>
+
+<section class="panel" id="panel-net" data-p="net" aria-label="Network">
+  <div class="p-clip"><div class="p-inner">
+    <div class="p-head"><div class="p-title">Network</div><div class="p-new" id="netState"></div></div>
+    <div id="netBody"></div>
+  </div></div>
+</section>
+
+<section class="panel" id="panel-bt" data-p="bt" aria-label="Bluetooth">
+  <div class="p-clip"><div class="p-inner">
+    <div class="p-head">
+      <div class="p-title">Bluetooth</div><div class="p-new"></div>
+      <button class="text-btn" id="btScan" type="button">Scan</button>
+      <button class="sw" id="btSw" type="button" role="switch" aria-checked="true" aria-label="Bluetooth"></button>
+    </div>
+    <div id="btBody"></div>
+  </div></div>
+</section>
+
+<section class="panel" id="panel-power" data-p="power" aria-label="Power">
+  <div class="p-clip"><div class="p-inner">
+    <div class="p-head"><div class="p-title">Power</div><div class="p-new">tk421</div></div>
+    <div class="p-list" id="powerBody"></div>
+  </div></div>
+</section>
+
+<p class="hint">Prototype · click the toolbar icons · <kbd>W</kbd> network: Ethernet / Wi-Fi / unplugged · notifications: <kbd>N</kbd> <kbd>A</kbd> <kbd>C</kbd> <kbd>L</kbd> <kbd>T</kbd> <kbd>M</kbd> <kbd>E</kbd> <kbd>U</kbd> <kbd>D</kbd> <kbd>X</kbd> · <kbd>Esc</kbd> close · all data is mock</p>
+
+<script>
+(() => {
+  const $ = id => document.getElementById(id);
+  const root = document.body, island = $('island'), bell = $('bell'), list = $('list');
+  const pad = n => String(n).padStart(2, '0');
+  // Real notifications come from other apps: always render them as plain text, never markup.
+  const esc = s => String(s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+
+  /* ---- icons + mock apps ----
+     Real apps ship their own coloured icons (the shell resolves them from the notification's app icon),
+     so the tiles below are coloured. `bellfb` is the fallback glyph for an app with no usable icon. */
+  const ICON = {
+    ghostty: '<svg class="app" viewBox="0 0 24 24"><path d="M12 3a7.5 7.5 0 0 0-7.5 7.5V21l2.5-2 2.5 2 2.5-2 2.5 2 2.5-2 2.5 2V10.5A7.5 7.5 0 0 0 12 3z" fill="#7b61ff"/><circle cx="9.3" cy="10.5" r="1.5" fill="#fff"/><circle cx="14.7" cy="10.5" r="1.5" fill="#fff"/></svg>',
+    cal:     '<svg class="app" viewBox="0 0 24 24"><rect x="3.5" y="3.5" width="17" height="17" rx="2" fill="#fff"/><path d="M3.5 5.5a2 2 0 0 1 2-2h13a2 2 0 0 1 2 2V9h-17z" fill="#4285f4"/><rect x="7" y="12" width="3" height="3" fill="#ea4335"/><rect x="11" y="12" width="3" height="3" fill="#34a853"/><rect x="15" y="12" width="2.5" height="3" fill="#fbbc04"/></svg>',
+    shot:    '<svg class="app" viewBox="0 0 24 24"><rect x="8.5" y="4" width="7" height="3.5" rx="1" fill="#2ec27e"/><rect x="3" y="6.5" width="18" height="13" rx="2" fill="#2ec27e"/><circle cx="12" cy="13" r="3.8" fill="#fff"/><circle cx="12" cy="13" r="1.9" fill="#2ec27e"/></svg>',
+    warn:    '<svg class="app" viewBox="0 0 24 24"><path d="M12 3.5l9.5 16.5h-19z" fill="#f5a623"/><path d="M12 9.5v5.2" stroke="#1a1a21" stroke-width="1.8" fill="none"/><circle cx="12" cy="17.4" r="1.1" fill="#1a1a21"/></svg>',
+    bt:      '<svg class="app" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9.5" fill="#1a73e8"/><path d="M8.5 8.5l7 7-3.5 3V5.5l3.5 3-7 7" stroke="#fff" stroke-width="1.5" fill="none"/></svg>',
+    net:     '<svg class="app" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9.5" fill="#26a269"/><path d="M2.5 12h19M12 2.5c3 3 3 16.5 0 19M12 2.5c-3 3-3 16.5 0 19" stroke="#fff" stroke-width="1.3" fill="none"/></svg>',
+    pkg:     '<svg class="app" viewBox="0 0 24 24"><path d="M12 3l8 4.5v9L12 21l-8-4.5v-9z" fill="#e5a50a"/><path d="M4 7.5l8 4.5 8-4.5M12 12v9" stroke="#7a4f00" stroke-width="1.3" fill="none"/></svg>',
+    chat:    '<svg class="app" viewBox="0 0 24 24"><path d="M4 5h16v11h-8.5L7 20v-4H4z" fill="#33b679"/><circle cx="8.5" cy="10.5" r="1.1" fill="#fff"/><circle cx="12" cy="10.5" r="1.1" fill="#fff"/><circle cx="15.5" cy="10.5" r="1.1" fill="#fff"/></svg>',
+    bellfb:  '<svg viewBox="0 0 24 24"><path d="M6 17V11a6 6 0 0 1 12 0v6l1.5 2h-15zM10 21h4"/></svg>',
+    x:       '<svg viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18"/></svg>',
+    wifi:    '<svg viewBox="0 0 24 24"><path d="M2 9a15 15 0 0 1 20 0M5.5 12.5a10 10 0 0 1 13 0M9 16a5 5 0 0 1 6 0"/><circle cx="12" cy="19.5" r=".6"/></svg>',
+    wifiOff: '<svg viewBox="0 0 24 24"><path d="M2 9a15 15 0 0 1 20 0M5.5 12.5a10 10 0 0 1 13 0M9 16a5 5 0 0 1 6 0M4 4l16 16"/><circle cx="12" cy="19.5" r=".6"/></svg>',
+    eth:     '<svg viewBox="0 0 24 24"><path d="M4 6h16v8h-3v3H7v-3H4zM9 10v2M12 10v2M15 10v2"/></svg>',
+    ethOff:  '<svg viewBox="0 0 24 24"><path d="M4 6h16v8h-3v3H7v-3H4zM9 10v2M12 10v2M15 10v2M3 3l18 18"/></svg>',
+    lock:    '<svg viewBox="0 0 24 24"><rect x="5" y="11" width="14" height="9" rx="1.5"/><path d="M8 11V8a4 4 0 0 1 8 0v3"/></svg>',
+    moon:    '<svg viewBox="0 0 24 24"><path d="M20 14.5A8 8 0 0 1 9.5 4a8 8 0 1 0 10.5 10.5z"/></svg>',
+    logout:  '<svg viewBox="0 0 24 24"><path d="M10 4H5v16h5M15 8l4 4-4 4M19 12H9"/></svg>',
+    restart: '<svg viewBox="0 0 24 24"><path d="M4 12a8 8 0 1 1 2.5 5.8M4 19v-5h5"/></svg>',
+    power:   '<svg viewBox="0 0 24 24"><path d="M12 3v8M6.3 6.8a8 8 0 1 0 11.4 0"/></svg>',
+    phones:  '<svg viewBox="0 0 24 24"><path d="M4 14v-2a8 8 0 0 1 16 0v2M4 14h3v6H4zM17 14h3v6h-3z"/></svg>',
+    keys:    '<svg viewBox="0 0 24 24"><rect x="3" y="7" width="18" height="10" rx="1.5"/><path d="M7 11h.01M11 11h.01M15 11h.01M8 14h8"/></svg>',
+    mouse:   '<svg viewBox="0 0 24 24"><rect x="7" y="3" width="10" height="18" rx="5"/><path d="M12 7v4"/></svg>',
+    phone:   '<svg viewBox="0 0 24 24"><rect x="7" y="3" width="10" height="18" rx="2"/><path d="M11 18h2"/></svg>',
+    speaker: '<svg viewBox="0 0 24 24"><rect x="6" y="3" width="12" height="18" rx="2"/><circle cx="12" cy="14" r="3"/><path d="M12 7h.01"/></svg>',
+    btBig:   '<svg viewBox="0 0 24 24"><path d="M7 7l10 10-5 4V3l5 4L7 17"/></svg>',
+    padlock: '<svg viewBox="0 0 24 24" style="width:12px;height:12px"><rect x="5" y="11" width="14" height="9" rx="1.5"/><path d="M8 11V8a4 4 0 0 1 8 0v3"/></svg>',
+    check:   '<svg viewBox="0 0 24 24" style="width:14px;height:14px"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg>',
+    off:     '<svg viewBox="0 0 24 24"><path d="M6 17V11a6 6 0 0 1 9-5.2M18 11v6l1.5 2H8M10 21h4M4 4l16 16"/></svg>',
+  };
+  const APPS = {
+    calendar:  { name: 'Calendar',    icon: ICON.cal },
+    ghostty:   { name: 'Ghostty',     icon: ICON.ghostty },
+    shots:     { name: 'Screenshots', icon: ICON.shot },
+    system:    { name: 'System',      icon: ICON.warn },
+    bluetooth: { name: 'Bluetooth',   icon: ICON.bt },
+    network:   { name: 'Network',     icon: ICON.net },
+    pacman:    { name: 'Updates',     icon: ICON.pkg },
+    chat:      { name: 'Chat',        icon: ICON.chat },
+    unknown:   { name: 'Unknown app', icon: ICON.bellfb },
+  };
+  const POOL = [
+    { app: 'ghostty',   title: 'Build finished',        body: 'quickshell · release build completed in 42 s with 0 warnings.' },
+    { app: 'shots',     title: 'Screenshot saved',      body: '~/Pictures/Screenshots/2026-10-12_14-02-11.png · copied to clipboard' },
+    { app: 'bluetooth', title: 'Headphones connected',  body: 'WH-1000XM5 · battery 82%' },
+    { app: 'network',   title: 'Connection restored',   body: 'Ethernet · enp5s0 · 1 Gbit/s' },
+    { app: 'pacman',    title: '14 updates available',  body: 'linux, mesa, hyprland and 11 more packages' },
+  ];
+  // The "default" action is the click action many apps send; it never becomes a button.
+  const WITH_ACTIONS = { app: 'calendar', title: 'Daily starts in 10 minutes', body: 'Google Meet · 10:00 · 30 min · 6 attendees', actions: [{ id: 'default', text: 'Open' }, { id: 'join', text: 'Join' }, { id: 'snooze', text: 'Snooze' }] };
+  const CRITICAL = { app: 'system', title: 'Disk space low', body: '/ is 94% full on nvme0n1p2. Free some space before the next system update.', urgency: 'critical', actions: [{ id: 'open', text: 'Open' }] };
+  const LOW = { app: 'pacman', title: 'Mirrorlist refreshed', body: 'reflector · 12 mirrors updated', urgency: 'low' };
+  const LONG = { app: 'chat', title: 'Release candidate 4 is ready for testing, please check the staging environment and report anything unusual before Friday evening so we can ship', body: 'Hi team, the build finished and every automated check is green. Before we tag it I would like two people to go through the onboarding flow, the billing page and the export feature on staging, write down anything that looks odd and post it in this thread. If nothing comes up by Friday afternoon we release in the evening and I will be on call all weekend, so please do not wait until Monday to tell me about problems.', actions: [{ id: 'reply', text: 'Open thread' }] };
+  const MARKUP = { app: 'chat', title: '<b>Deploy</b> finished & <a href="http://x">link</a>', body: '<i>staging</i> is live &amp; <script>alert(1)<\/script> never runs' };
+  const NOTITLE = { app: 'shots', title: '', body: 'Region copied to clipboard' };
+  const NOICON = { app: 'unknown', title: 'Tray helper started', body: 'This app has no icon, so the bell glyph is used.' };
+
+  /* ---- state ---- */
+  const TOAST_MS = 5000;
+  let items = [], seq = 0, freshId = null, poolAt = 0;
+  let dnd = false, centerOpen = false, hold = false;
+  let toastId = null, timed = false, hovering = false, toastTimer = 0, toastLeft = 0, toastStart = 0, leaveT = 0, lastCount = '';
+
+  // Same rules as notifications/logic.js: strip control and bidi characters, limit lengths, never cut an emoji in half.
+  const clip = (s, n) => {
+    s = String(s ?? '').replace(/[\u0000-\u0008\u000B-\u001F\u007F‪-‮⁦-⁩]/g, '');
+    if (s.length <= n) return s;
+    let e = n - 1; const c = s.charCodeAt(e - 1);
+    if (c >= 0xD800 && c <= 0xDBFF) e--;
+    return s.slice(0, e) + '…';
+  };
+  const oneLine = s => s.replace(/\s*\n\s*/g, ' ').trim();
+  const titleOf = (summary, app) => oneLine(clip(summary, 120)) || oneLine(clip(APPS[app]?.name, 40)) || 'Notification';
+  const acts = n => n.actions.filter(a => a.id !== 'default' && a.text !== '').slice(0, 3);
+  const mk = (def, unread, ts) => ({ id: ++seq, app: def.app, title: titleOf(def.title, def.app), body: clip(def.body, 600), urgency: def.urgency || 'normal',
+    actions: (def.actions || []).map(a => ({ id: a.id, text: oneLine(clip(a.text, 24)) })), unread, ts: ts ?? Date.now() });
+  const startOfToday = () => { const d = new Date(); d.setHours(0, 0, 0, 0); return d.getTime(); };
+  const unreadCount = () => items.filter(i => i.unread).length;
+
+  function ago(ts) {
+    const s = (Date.now() - ts) / 1000;
+    if (s < 45) return 'now';
+    if (s < 3600) return Math.round(s / 60) + 'm';
+    if (ts >= startOfToday()) return Math.floor(s / 3600) + 'h';
+    const d = new Date(ts); return pad(d.getHours()) + ':' + pad(d.getMinutes());
+  }
+  function dayLabel(ts) {
+    const t0 = startOfToday();
+    if (ts >= t0) return 'Today';
+    if (ts >= t0 - 864e5) return 'Yesterday';
+    return new Date(ts).toLocaleDateString('en-US', { weekday: 'short', day: 'numeric', month: 'short' });
+  }
+
+  /* ---- clock (idle pill) ---- */
+  function tick() {
+    const n = new Date();
+    $('time').innerHTML = `${pad(n.getHours())}:${pad(n.getMinutes())}<span class="s">:${pad(n.getSeconds())}</span>`;
+  }
+  tick(); setInterval(tick, 1000);
+
+  /* ---- bell: count + ping ---- */
+  function renderBell() {
+    const n = centerOpen ? 0 : unreadCount();
+    const txt = n ? (n > 9 ? '9+' : String(n)) : '';
+    if (txt !== lastCount) { $('count').innerHTML = txt ? `<span class="roll">${txt}</span>` : ''; lastCount = txt; }
+    bell.setAttribute('aria-label', n ? `Notifications, ${n} unread` : 'Notifications');
+  }
+  function ping() { bell.classList.remove('ping'); void bell.offsetWidth; bell.classList.add('ping'); }
+
+  /* ---- toast ---- */
+  function toastHTML(n) {
+    const a = APPS[n.app], crit = n.urgency === 'critical';
+    return `<div class="t-inner${crit ? ' crit' : ''}" data-id="${n.id}"${crit ? ' role="alert"' : ''}>
+      <div class="tile">${a.icon}</div>
+      <div class="t-main">
+        <div class="t-head"><span class="t-app">${esc(a.name)}</span><span class="t-time">${crit ? 'Critical' : 'now'}</span></div>
+        <div class="t-title">${esc(n.title)}</div>
+        <div class="t-body">${esc(n.body)}</div>
+        ${acts(n).length ? `<div class="t-actions">${acts(n).map((x, i) => `<button class="act${i ? '' : ' main'}" type="button" data-a="${i}">${esc(x.text)}</button>`).join('')}</div>` : ''}
+      </div>
+      <button class="t-x" type="button" aria-label="Dismiss">${ICON.x}</button>
+    </div>`;
+  }
+  const curInner = () => $('toast').querySelector('.t-inner:not(.out)');
+
+  function pauseToast() { if (!timed) return; clearTimeout(toastTimer); toastLeft -= performance.now() - toastStart; }
+  function resumeToast() { if (!timed) return; toastStart = performance.now(); toastTimer = setTimeout(() => hideToast(false), Math.max(toastLeft, 250)); }
+
+  function expand() {
+    const el = curInner(); if (!el) return;
+    el.classList.add('x');
+    root.style.setProperty('--toast-xh', el.offsetHeight + 'px');
+    root.classList.add('xpand');
+  }
+  function collapse() {
+    const el = curInner(); if (el) el.classList.remove('x');
+    root.classList.remove('xpand');
+  }
+  // The toast may be hovered while it is still growing, when the text wraps too much: measure again once the width settles.
+  island.addEventListener('transitionend', e => { if (e.propertyName === 'width' && root.classList.contains('xpand')) expand(); });
+
+  function showToast(n) {
+    const layer = $('toast'), crit = n.urgency === 'critical';
+    clearTimeout(toastTimer); clearTimeout(leaveT);
+    const old = curInner();
+    if (old) { old.classList.add('out'); setTimeout(() => old.remove(), 220); }
+    layer.insertAdjacentHTML('beforeend', toastHTML(n));
+    toastId = n.id;
+    root.classList.add('notify');
+    root.classList.toggle('crit', crit);
+    timed = !crit && !hold;                                   // critical alerts stay until dismissed
+    $('tbar').innerHTML = timed ? `<i style="animation-duration:${TOAST_MS}ms"></i>` : '';
+    toastLeft = TOAST_MS; resumeToast();
+    if (hovering) { pauseToast(); expand(); }
+  }
+
+  function hideToast(markRead) {
+    if (toastId == null) return;
+    clearTimeout(toastTimer); clearTimeout(leaveT);
+    if (markRead) { const it = items.find(i => i.id === toastId); if (it) it.unread = false; }
+    toastId = null; hovering = false; timed = false;
+    collapse();
+    root.classList.remove('notify', 'crit', 'toast-hover');
+    setTimeout(() => { if (toastId == null) { $('toast').querySelectorAll('.t-inner').forEach(e => e.remove()); $('tbar').innerHTML = ''; } }, 450);
+    renderBell(); renderList();
+  }
+
+  island.addEventListener('pointerenter', () => {
+    if (toastId == null) return;
+    clearTimeout(leaveT); hovering = true; pauseToast();
+    root.classList.add('toast-hover'); expand();
+  });
+  island.addEventListener('pointerleave', () => {
+    if (toastId == null) return;
+    leaveT = setTimeout(() => { hovering = false; root.classList.remove('toast-hover'); collapse(); resumeToast(); }, 180);
+  });
+  $('toast').addEventListener('click', e => {
+    const el = e.target.closest('.t-inner'); if (!el || el.classList.contains('out')) return;
+    const act = e.target.closest('.act');
+    if (act) { removeItem(+el.dataset.id); hideToast(false); return; }       // an action means it was handled
+    hideToast(true);                                                         // click or × hides the popup, history keeps it
+  });
+
+  /* ---- notification centre ---- */
+  function itemHTML(n) {
+    const a = APPS[n.app], crit = n.urgency === 'critical';
+    return `<div class="n${n.unread ? ' unread' : ''}${crit ? ' crit' : ''}${n.id === freshId ? ' fresh' : ''}" data-id="${n.id}">
+      <div class="tile sm">${a.icon}</div>
+      <div class="n-main">
+        <div class="n-head"><span class="n-app">${esc(a.name)}</span><span class="n-time">${ago(n.ts)}</span></div>
+        <div class="n-title">${esc(n.title)}</div>
+        <div class="n-body">${esc(n.body)}</div>
+        ${acts(n).length ? `<div class="n-actions">${acts(n).map((x, i) => `<button class="act${i ? '' : ' main'}" type="button" data-a="${i}">${esc(x.text)}</button>`).join('')}</div>` : ''}
+      </div>
+      <button class="n-x" type="button" aria-label="Dismiss">${ICON.x}</button>
+    </div>`;
+  }
+  function renderList() {
+    const keep = list.scrollTop, un = unreadCount();
+    $('pNew').textContent = un ? un + ' new' : '';
+    $('clearBtn').disabled = !items.length;
+    if (!items.length) {
+      list.innerHTML = `<div class="empty">${ICON.off}<b>No notifications</b><span>You're all caught up.</span></div>`;
+    } else {
+      let html = '', last = '';
+      for (const n of items) {
+        const d = dayLabel(n.ts);
+        if (d !== last) { html += `<div class="day">${esc(d)}</div>`; last = d; }
+        html += itemHTML(n);
+      }
+      list.innerHTML = html;
+    }
+    freshId = null;
+    list.scrollTop = keep;
+  }
+
+  function removeItem(id) {
+    const el = list.querySelector(`.n[data-id="${id}"]`);
+    items = items.filter(i => i.id !== id);
+    renderBell();
+    if (el) { el.style.height = el.offsetHeight + 'px'; void el.offsetHeight; el.classList.add('leaving'); setTimeout(renderList, 320); }
+    else renderList();
+  }
+  function clearAll() {
+    const els = [...list.querySelectorAll('.n')];
+    items = []; renderBell();
+    if (!els.length) return renderList();
+    els.forEach((el, i) => { el.style.height = el.offsetHeight + 'px'; void el.offsetHeight; el.style.transitionDelay = Math.min(i, 8) * 40 + 'ms'; el.classList.add('leaving'); });
+    setTimeout(renderList, 340 + Math.min(els.length, 8) * 40);
+  }
+
+  list.addEventListener('click', e => {
+    const el = e.target.closest('.n'); if (!el) return;
+    const id = +el.dataset.id;
+    if (e.target.closest('.n-x') || e.target.closest('.act')) return removeItem(id);
+    const it = items.find(i => i.id === id);
+    if (it && it.unread) { it.unread = false; el.classList.remove('unread'); renderBell(); }
+  });
+  $('clearBtn').addEventListener('click', clearAll);
+
+  function setDnd(v) {
+    dnd = v; root.classList.toggle('dnd', v);
+    $('dndBtn').setAttribute('aria-pressed', v);
+    if (v && toastId != null && root.classList.contains('crit') === false) hideToast(false);
+  }
+  $('dndBtn').addEventListener('click', () => setDnd(!dnd));
+
+  /* ---- toolbar: one dropdown slot, opening one closes the other ---- */
+  const btn = { net: $('btnNet'), bt: $('btnBt'), notif: bell, power: $('btnPower') };
+  let current = null;
+
+  function enterCenter() { centerOpen = true; root.classList.add('center'); if (toastId != null) hideToast(true); renderList(); renderBell(); }
+  function leaveCenter() {
+    centerOpen = false; root.classList.remove('center');
+    items.forEach(i => i.unread = false);
+    setTimeout(() => { if (!centerOpen) renderList(); }, 360);
+    renderBell();
+  }
+  function switchTo(name) {
+    if (name === current) return;
+    if (current === 'notif') leaveCenter();
+    if (current === 'power') cancelConfirm();
+    if (current) { $('panel-' + current).classList.remove('open'); btn[current].setAttribute('aria-expanded', 'false'); }
+    current = name;
+    if (!name) return;
+    $('panel-' + name).classList.add('open'); btn[name].setAttribute('aria-expanded', 'true');
+    if (name === 'notif') enterCenter(); else if (name === 'net') renderNet(); else if (name === 'bt') renderBt(); else renderPower();
+  }
+  const togglePanel = name => switchTo(current === name ? null : name);
+  const setCenter = v => { if (v) switchTo('notif'); else if (current === 'notif') switchTo(null); };
+  for (const k of Object.keys(btn)) btn[k].addEventListener('click', () => togglePanel(k));
+  document.addEventListener('pointerdown', e => {
+    if (!current || $('panel-' + current).contains(e.target) || $('toolbar').contains(e.target)) return;
+    switchTo(null);
+  });
+
+  /* ---- HUD pill in the island: confirms a power action ---- */
+  let hudTimer = 0;
+  function showHud(icon, label, state) {
+    $('hudContent').innerHTML = `${icon}<span class="hud-label">${esc(label)}</span><span class="hud-state">${esc(state)}</span>`;
+    root.classList.add('hud');
+    clearTimeout(hudTimer);
+    if (!hold) hudTimer = setTimeout(() => root.classList.remove('hud'), 2000);
+  }
+
+  /* ---- power ---- */
+  const POWER = [
+    { id: 'lock',    label: 'Lock',      hint: 'Super L', icon: ICON.lock,    hud: 'Locking' },
+    { id: 'suspend', label: 'Suspend',                    icon: ICON.moon,    hud: 'Suspending' },
+    { id: 'logout',  label: 'Log out',   confirm: true,   icon: ICON.logout,  hud: 'Logging out', gap: true },
+    { id: 'restart', label: 'Restart',   confirm: true,   icon: ICON.restart, hud: 'Restarting' },
+    { id: 'off',     label: 'Power off', confirm: true,   icon: ICON.power,   hud: 'Powering off' },
+  ];
+  let confirming = null, confirmTimer = 0;
+  function renderPower() {
+    $('powerBody').innerHTML = POWER.map(p => p.id === confirming
+      ? `<div class="row confirm${p.gap ? ' gap' : ''}" data-id="${p.id}">${p.icon}<span class="r-label">${p.label}?</span><button class="act" type="button" data-a="cancel" aria-label="Cancel">${ICON.x}</button><button class="act main" type="button" data-a="confirm">Confirm</button>${hold ? '' : '<div class="cd"><i></i></div>'}</div>`
+      : `<div class="row${p.gap ? ' gap' : ''}" data-id="${p.id}" role="button" tabindex="0">${p.icon}<span class="r-label">${p.label}</span>${p.hint ? `<span class="r-hint">${p.hint}</span>` : ''}</div>`).join('');
+  }
+  function cancelConfirm() { clearTimeout(confirmTimer); if (confirming) { confirming = null; renderPower(); } }
+  function askConfirm(id) {
+    confirming = id; renderPower(); clearTimeout(confirmTimer);
+    if (!hold) confirmTimer = setTimeout(cancelConfirm, 5000);               // an unanswered question cancels itself
+  }
+  function doPower(p) { cancelConfirm(); switchTo(null); showHud(p.icon, p.hud, '…'); }
+  $('powerBody').addEventListener('click', e => {
+    const row = e.target.closest('.row'); if (!row) return;
+    const p = POWER.find(x => x.id === row.dataset.id), a = e.target.closest('[data-a]')?.dataset.a;
+    if (a === 'cancel') return cancelConfirm();
+    if (a === 'confirm') return doPower(p);
+    if (row.classList.contains('confirm')) return;
+    p.confirm ? askConfirm(p.id) : doPower(p);
+  });
+  $('powerBody').addEventListener('keydown', e => { if ((e.key === 'Enter' || e.key === ' ') && e.target.matches('.row[role=button]')) { e.preventDefault(); e.target.click(); } });
+
+  /* ---- network ---- */
+  const NET = { mode: 'eth', down: 2.4, up: 0.18, selected: null, joining: null,
+    wifi: [ { ssid: 'TK-421-5G', sec: true, lvl: 4, state: 'connected' }, { ssid: 'Imperial-Guest', sec: false, lvl: 3 },
+            { ssid: 'DEATH-STAR-IOT', sec: true, lvl: 2 }, { ssid: 'Vizinho_2G', sec: true, lvl: 1 } ] };
+  const sig = n => `<svg class="sig" viewBox="0 0 16 16">${[1, 2, 3, 4].map(i => `<rect class="${i <= n ? '' : 'dim'}" x="${(i - 1) * 4}" y="${12 - i * 3}" width="2.4" height="${i * 3 + 2}" fill="currentColor" stroke="none" opacity="${i <= n ? 1 : 0.25}"/>`).join('')}</svg>`;
+  const fmtRate = v => v >= 1 ? v.toFixed(1) + ' MB/s' : Math.round(v * 1000) + ' KB/s';
+  function renderNetIcon() {
+    $('netIcon').innerHTML = NET.mode === 'eth' ? ICON.eth : NET.mode === 'wifi' ? ICON.wifi : ICON.ethOff;
+    btn.net.classList.toggle('off', NET.mode === 'off');
+    btn.net.setAttribute('aria-label', NET.mode === 'off' ? 'Network, not connected' : 'Network');
+  }
+  function renderNet() {
+    const m = NET.mode;
+    $('netState').textContent = m === 'off' ? 'Not connected' : 'Connected';
+    let h = '';
+    if (m === 'eth') h = `
+      <div class="conn">${ICON.eth}<div><div class="c-name">Ethernet</div><div class="c-sub">enp5s0 · 1 Gbit/s</div></div></div>
+      <div class="kv"><span>IPv4</span><b>192.168.0.14</b></div>
+      <div class="kv"><span>Down</span><b id="rxd">${fmtRate(NET.down)}</b></div>
+      <div class="kv"><span>Up</span><b id="txd">${fmtRate(NET.up)}</b></div>
+      <div class="p-actions"><button class="text-btn" type="button" data-a="disconnect">Disconnect</button></div>
+      <div class="note">Wi-Fi · no adapter found on this machine</div>`;
+    else if (m === 'off') h = `
+      <div class="conn bad">${ICON.ethOff}<div><div class="c-name">Ethernet</div><div class="c-sub">enp5s0 · cable unplugged</div></div></div>
+      <div class="p-actions"><button class="text-btn" type="button" data-a="connect">Connect</button></div>
+      <div class="note">Wi-Fi · no adapter found on this machine</div>`;
+    else {
+      const cur = NET.wifi.find(n => n.state === 'connected');
+      h = `<div class="conn">${ICON.wifi}<div><div class="c-name">${esc(cur ? cur.ssid : 'Wi-Fi')}</div><div class="c-sub">${cur ? 'Connected · ' + (cur.lvl * 25) + '% signal' : 'Not connected'}</div></div></div>
+        ${cur ? `<div class="kv"><span>Down</span><b id="rxd">${fmtRate(NET.down)}</b></div><div class="kv"><span>Up</span><b id="txd">${fmtRate(NET.up)}</b></div>` : ''}
+        <div class="sec">Available networks</div>`
+        + NET.wifi.map(n => `<div class="row" data-ssid="${esc(n.ssid)}">${sig(n.lvl)}<span class="r-main"><span class="r-label">${n.state === 'connected' ? '<i class="dot"></i>' : ''}${esc(n.ssid)}</span><span class="r-sub">${n.joining ? 'Connecting…' : n.state === 'connected' ? 'Connected' : n.sec ? 'Secured' : 'Open'}</span></span>${n.sec ? ICON.padlock : ''}<span class="r-act">${n.state === 'connected' ? 'Disconnect' : 'Connect'}</span></div>`
+          + (NET.selected === n.ssid ? `<div class="join"><input type="password" placeholder="Password" aria-label="Password for ${esc(n.ssid)}"><button class="act main" type="button" data-a="join">Join</button></div>` : '')).join('');
+    }
+    $('netBody').innerHTML = h;
+    const inp = $('netBody').querySelector('.join input'); if (inp && !hold) inp.focus();
+  }
+  $('netBody').addEventListener('click', e => {
+    const a = e.target.closest('[data-a]')?.dataset.a;
+    if (a === 'disconnect') { NET.mode = 'off'; renderNetIcon(); return renderNet(); }
+    if (a === 'connect') { NET.mode = 'eth'; renderNetIcon(); return renderNet(); }
+    if (a === 'join') return joinWifi(NET.selected);
+    const row = e.target.closest('.row[data-ssid]'); if (!row) return;
+    const n = NET.wifi.find(x => x.ssid === row.dataset.ssid);
+    if (n.state === 'connected') { n.state = undefined; renderNet(); return; }
+    if (n.sec) { NET.selected = NET.selected === n.ssid ? null : n.ssid; renderNet(); } else joinWifi(n.ssid);
+  });
+  $('netBody').addEventListener('keydown', e => { if (e.key === 'Enter' && e.target.matches('.join input')) joinWifi(NET.selected); });
+  function joinWifi(ssid) {
+    const n = NET.wifi.find(x => x.ssid === ssid); if (!n) return;
+    NET.selected = null; n.joining = true; renderNet();
+    setTimeout(() => { if (NET.mode !== 'wifi' || !n.joining) return; NET.wifi.forEach(x => { x.state = undefined; }); n.joining = false; n.state = 'connected'; if (current === 'net') renderNet(); }, hold ? 0 : 1300);
+  }
+  setInterval(() => {                                   // mock traffic
+    NET.down = Math.max(0.05, NET.down + (Math.random() - 0.5) * 0.8); NET.up = Math.max(0.02, NET.up + (Math.random() - 0.5) * 0.1);
+    const r = $('rxd'), t = $('txd'); if (r) r.textContent = fmtRate(NET.down); if (t) t.textContent = fmtRate(NET.up);
+  }, 1000);
+  function cycleNet() { NET.mode = { eth: 'wifi', wifi: 'off', off: 'eth' }[NET.mode]; NET.selected = null; renderNetIcon(); if (current === 'net') renderNet(); }
+
+  /* ---- Bluetooth ---- */
+  const BT = { on: true, scanning: false, found: false, devices: [
+    { id: 'wh', name: 'WH-1000XM5',  icon: ICON.phones, state: 'connected', battery: 82 },
+    { id: 'kb', name: 'Keychron K2', icon: ICON.keys,   state: 'paired' },
+    { id: 'mx', name: 'MX Master 3', icon: ICON.mouse,  state: 'paired' },
+    { id: 'px', name: 'Pixel 8',     icon: ICON.phone,  state: 'paired' } ],
+    nearby: [] };
+  const NEARBY = [ { id: 'jb', name: 'JBL Flip 6', icon: ICON.speaker, state: 'nearby' }, { id: 'un', name: 'Unknown device', icon: ICON.btBig, state: 'nearby', sub: 'AA:BB:CC:12:34:56' } ];
+  const btSub = d => d.sub || ({ connected: 'Connected' + (d.battery ? ' · ' + d.battery + '%' : ''), paired: 'Paired', connecting: 'Connecting…', pairing: 'Pairing…', nearby: 'Not paired' }[d.state]);
+  const btAct = d => ({ connected: 'Disconnect', paired: 'Connect', nearby: 'Pair' }[d.state] || '');
+  function renderBtBar() {
+    const n = BT.on ? BT.devices.filter(d => d.state === 'connected').length : 0;
+    $('btCount').innerHTML = n ? `<span class="roll">${n} connected</span>` : '';
+    btn.bt.classList.toggle('off', !BT.on);
+    btn.bt.setAttribute('aria-label', BT.on ? (n ? `Bluetooth, ${n} connected` : 'Bluetooth') : 'Bluetooth, off');
+  }
+  const devRow = d => `<div class="row" data-id="${d.id}">${d.icon}<span class="r-main"><span class="r-label">${d.state === 'connected' ? '<i class="dot"></i>' : ''}${esc(d.name)}</span><span class="r-sub">${esc(btSub(d))}</span></span><span class="r-act">${btAct(d)}</span></div>`;
+  function renderBt() {
+    $('btSw').setAttribute('aria-checked', BT.on);
+    $('btScan').style.display = BT.on ? '' : 'none';
+    $('btScan').textContent = BT.scanning ? 'Scanning…' : 'Scan';
+    if (!BT.on) { $('btBody').innerHTML = `<div class="empty">${ICON.off}<b>Bluetooth is off</b><span>Turn it on to connect your devices.</span><button class="act main" type="button" data-a="on">Turn on</button></div>`; return; }
+    $('btBody').innerHTML = `<div class="sec">My devices</div>${BT.devices.map(devRow).join('')}`
+      + (BT.scanning || BT.nearby.length ? `<div class="sec">Nearby</div>${BT.scanning && !BT.nearby.length ? '<div class="note">Searching…</div>' : ''}${BT.nearby.map(devRow).join('')}` : '')
+      + '<div style="height:6px"></div>';
+  }
+  function setBt(on) {
+    BT.on = on; BT.scanning = false;
+    if (!on) BT.devices.forEach(d => { if (d.state !== 'paired') d.state = 'paired'; });
+    renderBtBar(); renderBt();
+  }
+  $('btSw').addEventListener('click', () => setBt(!BT.on));
+  $('btScan').addEventListener('click', () => {
+    if (BT.scanning) return;
+    BT.scanning = true; BT.nearby = []; renderBt();
+    setTimeout(() => { BT.scanning = false; BT.nearby = NEARBY.map(d => ({ ...d })); if (current === 'bt') renderBt(); }, hold ? 0 : 3200);
+  });
+  $('btBody').addEventListener('click', e => {
+    if (e.target.closest('[data-a="on"]')) return setBt(true);
+    const row = e.target.closest('.row'); if (!row) return;
+    let d = BT.devices.find(x => x.id === row.dataset.id), nearby = false;
+    if (!d) { d = BT.nearby.find(x => x.id === row.dataset.id); nearby = true; }
+    if (!d || d.state === 'connecting' || d.state === 'pairing') return;
+    if (d.state === 'connected') { d.state = 'paired'; delete d.battery; renderBtBar(); return renderBt(); }
+    const wasNearby = nearby;
+    d.state = wasNearby ? 'pairing' : 'connecting'; renderBt();
+    setTimeout(() => {
+      if (!BT.on || d.state !== (wasNearby ? 'pairing' : 'connecting')) return;      // switched off or cancelled meanwhile
+      if (wasNearby) { BT.nearby = BT.nearby.filter(x => x !== d); delete d.sub; BT.devices.push(d); }
+      d.state = 'connected'; d.battery = 40 + Math.floor(Math.random() * 55);
+      renderBtBar(); if (current === 'bt') renderBt();
+    }, hold ? 0 : 1200);
+  });
+
+  /* ---- arrivals ---- */
+  function notify(def) {
+    const n = mk(def, true);
+    items.unshift(n); freshId = n.id;
+    if (centerOpen) renderList();
+    else if (n.urgency === 'low') { /* history only: no popup, no ping */ }
+    else {
+      // DND mutes popups but not critical alerts; the bell still pings and counts.
+      if (!dnd || n.urgency === 'critical') showToast(n);
+      ping();
+    }
+    renderBell();
+    return n;
+  }
+
+  addEventListener('keydown', e => {
+    if (e.ctrlKey || e.metaKey || e.altKey) return;
+    const k = e.key.toLowerCase();
+    if (k === 'n') notify(POOL[poolAt++ % POOL.length]);
+    else if (k === 'a') notify(WITH_ACTIONS);
+    else if (k === 'c') notify(CRITICAL);
+    else if (k === 'l') notify(LOW);
+    else if (k === 't') notify(LONG);
+    else if (k === 'm') notify(MARKUP);
+    else if (k === 'e') notify(NOTITLE);
+    else if (k === 'u') notify(NOICON);
+    else if (k === 'd') setDnd(!dnd);
+    else if (k === 'x') clearAll();
+    else if (k === 'b') setCenter(!centerOpen);
+    else if (k === 'w') cycleNet();
+    else if (e.key === 'Escape') { if (confirming) cancelConfirm(); else if (current) switchTo(null); else hideToast(true); }
+  });
+
+  /* ---- seed history (relative to now so the prototype is always populated) ---- */
+  const ago_m = m => Date.now() - m * 60000, y = h => startOfToday() - h * 3600e3;
+  items = [
+    mk(WITH_ACTIONS, true, ago_m(4)),
+    mk(POOL[0], true, ago_m(38)),
+    mk(POOL[2], false, ago_m(125)),
+    mk(POOL[4], false, y(2.5)),
+    mk(POOL[1], false, y(14)),
+  ];
+  renderBell(); renderList(); renderNetIcon(); renderBtBar();
+  setInterval(() => { if (centerOpen) renderList(); }, 30000);
+
+  /* ---- static states for screenshots: #toast #actions #critical #center #center-dnd #empty #dnd ---- */
+  const h = location.hash.slice(1);
+  if (h) {
+    document.documentElement.classList.add('static');
+    hold = true;
+    if (h === 'toast') notify(POOL[0]);
+    else if (h === 'actions') { notify(WITH_ACTIONS); setTimeout(() => island.dispatchEvent(new Event('pointerenter')), 800); }
+    else if (h === 'critical') notify(CRITICAL);
+    else if (h === 'long') { notify(LONG); setTimeout(() => island.dispatchEvent(new Event('pointerenter')), 800); }
+    else if (h === 'markup') notify(MARKUP);
+    else if (h === 'noicon') notify(NOICON);
+    else if (h === 'notitle') notify(NOTITLE);
+    else if (h === 'low') { notify(LOW); setCenter(true); }
+    else if (h === 'dnd') setDnd(true);
+    else if (h === 'center') setCenter(true);
+    else if (h === 'power') switchTo('power');
+    else if (h === 'power-confirm') { switchTo('power'); askConfirm('off'); }
+    else if (h === 'net') switchTo('net');
+    else if (h === 'wifi') { NET.mode = 'wifi'; renderNetIcon(); switchTo('net'); }
+    else if (h === 'wifi-join') { NET.mode = 'wifi'; renderNetIcon(); NET.selected = 'DEATH-STAR-IOT'; switchTo('net'); }
+    else if (h === 'net-off') { NET.mode = 'off'; renderNetIcon(); switchTo('net'); }
+    else if (h === 'bt') switchTo('bt');
+    else if (h === 'bt-found') { BT.nearby = NEARBY.map(d => ({ ...d })); switchTo('bt'); }
+    else if (h === 'bt-off') { setBt(false); switchTo('bt'); }
+    else if (h === 'hud') showHud(ICON.power, 'Powering off', '…');
+    else if (h === 'center-dnd') { setDnd(true); setCenter(true); }
+    else if (h === 'empty') { items = []; renderList(); setCenter(true); }
+  }
+})();
+</script>
+</body>
+</html>

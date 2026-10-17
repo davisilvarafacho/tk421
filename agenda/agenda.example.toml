@@ -1,0 +1,13 @@
+# Install with: install -m 600 agenda/agenda.example.toml agenda/agenda.toml, then paste your link
+# Link: Google Calendar -> Settings -> (your calendar) -> Integrate calendar -> "Secret address in iCal format".
+# Anyone with this link can read the whole calendar. Never commit or share it.
+
+[[calendar]]
+name = "Pessoal"
+url  = "https://calendar.google.com/calendar/ical/REPLACE_ME/private-REPLACE_ME/basic.ics"
+
+# Repeat [[calendar]] for more calendars.
+
+[sync]            # optional
+back_days    = 45
+forward_days = 120

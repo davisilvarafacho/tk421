@@ -1,0 +1,36 @@
+# name: 'TK421 Imperial Mono-Red'
+# preferred_background: black
+# fish syntax colours for the matching Ghostty theme (terminal/TK421-Imperial-Mono-Red). Named ANSI colours, so they follow
+# the terminal palette. Where the hue is gone, weight and underline carry the meaning (errors are bold and underlined).
+
+fish_color_normal normal
+fish_color_command brwhite --bold
+fish_color_keyword white --italics
+fish_color_quote yellow
+fish_color_redirection brwhite
+fish_color_end brblack
+fish_color_error brred --bold --underline
+fish_color_param white
+fish_color_option white
+fish_color_comment brblack
+fish_color_operator blue
+fish_color_escape blue --bold
+fish_color_autosuggestion brblack
+fish_color_valid_path --underline
+fish_color_cwd white
+fish_color_cwd_root brwhite --bold
+fish_color_user white
+fish_color_host white
+fish_color_host_remote white --italics
+fish_color_cancel -r
+fish_color_selection white --bold --background=black
+fish_color_search_match --bold --background=black
+fish_color_history_current --bold
+fish_pager_color_progress brblack
+fish_pager_color_prefix white --bold --underline
+fish_pager_color_completion normal
+fish_pager_color_description brblack
+fish_pager_color_selected_background --background=black
+fish_pager_color_selected_prefix white --bold --underline
+fish_pager_color_selected_completion white --bold
+fish_pager_color_selected_description white

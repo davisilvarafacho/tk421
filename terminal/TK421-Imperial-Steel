@@ -1,0 +1,32 @@
+# TK-421 Imperial Steel: Ghostty theme, derived from Theme.imperial (theme/Theme.qml, tk421/TK421.md section 24).
+# Cold, desaturated, no neon. Every normal colour is >= 5:1 on the background; bright-black is ~4.5:1 (fish autosuggestions).
+# Test it in a separate session: terminal/try-palette.sh
+
+background = #050505
+foreground = #E8E6E3
+
+cursor-color = #8EA6D4
+cursor-text = #050505
+
+selection-background = #29384F
+selection-foreground = #E8E6E3
+
+# black, red, green, yellow, blue, magenta, cyan, white
+palette = 0=#1A1A21
+palette = 1=#C8636D
+palette = 2=#7FA08C
+palette = 3=#B8A06A
+palette = 4=#6F8CC0
+palette = 5=#8F7FAF
+palette = 6=#6FA3B3
+palette = 7=#C7C5C2
+
+# bright variants
+palette = 8=#787780
+palette = 9=#E0838D
+palette = 10=#9DBFAA
+palette = 11=#D2BD87
+palette = 12=#8EA6D4
+palette = 13=#AC9CCB
+palette = 14=#92C0CE
+palette = 15=#F4F2EF

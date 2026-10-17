@@ -1,0 +1,15 @@
+singleton Audio Audio.qml
+singleton Media Media.qml
+singleton Agenda Agenda.qml
+SystemStats SystemStats.qml
+singleton Notifications Notifications.qml
+singleton ClaudeUsage ClaudeUsage.qml
+singleton Dropdown Dropdown.qml
+singleton Hud Hud.qml
+singleton Power Power.qml
+singleton Tray Tray.qml
+singleton Net Net.qml
+singleton Bt Bt.qml
+singleton Sound Sound.qml
+singleton Wallpaper Wallpaper.qml
+singleton Resources Resources.qml

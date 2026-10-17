@@ -1,0 +1,8 @@
+# Secrets and generated data for the Google Calendar sync (see docs/superpowers/specs/2026-10-12-google-calendar-ical-design.md)
+agenda/agenda.toml*
+agenda/cache/
+agenda/.venv/
+.superpowers/
+__pycache__/
+wallpaper/state.json
+.pytest_cache/

@@ -1,0 +1,247 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>TK-421 · Sound flyout</title>
+<style>
+  /* Palette: Imperial Destroyer profile (TK421.md §24). Orbitron for labels and digits, Geist for UI (§12).
+     Same dropdown frame and unroll motion as prototypes/toolbar; only the contents of the sound panel change:
+     a segmented power-cell gauge, framed device icons, and status words in place of check marks. */
+  :root {
+    color-scheme: dark;
+    --bg: #050505;
+    --surface: #0c0b0d;
+    --surface-alt: #1a1a21;
+    --text: #e8e6e3;
+    --muted: #8e8b88;
+    --accent: #506a9b;
+    --accent-dim: #29384f;
+    --accent-text: #8ea6d4;      /* accent tinted for small text: 7:1 on the surface (the raw accent is ~3.3:1) */
+    --danger: #a14d55;
+    --danger-text: #d9808a;
+    --border: #3f3e44;
+    --cell-off: #26252a;
+
+    --ease: cubic-bezier(0.22, 1, 0.36, 1);
+    --display: "Orbitron", "Geist", ui-sans-serif, sans-serif;
+    --ui: "Geist", ui-sans-serif, system-ui, sans-serif;
+  }
+
+  * { box-sizing: border-box; margin: 0; }
+  html, body { height: 100%; background: var(--bg); }
+  body { font-family: var(--ui); color: var(--text); overflow: hidden; -webkit-font-smoothing: antialiased; }
+  ::selection { background: var(--accent-dim); color: var(--text); }
+  button { font: inherit; color: inherit; }
+  svg { display: block; fill: none; stroke: currentColor; stroke-width: 1.7; stroke-linecap: round; stroke-linejoin: round; }
+
+  .wall { position: fixed; inset: 0; background: url("../toolbar/wallpaper.jpg") center / cover no-repeat; filter: brightness(0.8); }
+
+  /* context only: the toolbar capsule */
+  .cap { position: fixed; top: 4px; right: 30px; height: 28px; width: 250px; background: var(--surface); border: 1px solid var(--border); border-radius: 14px; }
+
+  /* ---------- the dropdown frame (as in the real DropdownHost): 340 wide, unrolls from the capsule ---------- */
+  .panel {
+    position: fixed; top: 40px; right: 30px; width: 240px; height: 0; overflow: hidden;
+    background: var(--surface); border: 1px solid var(--border); border-radius: 14px; opacity: 0;
+    transition: width 340ms var(--ease), height 340ms var(--ease), border-radius 340ms var(--ease), opacity 160ms ease;
+  }
+  .panel.open { width: 340px; height: var(--h, 340px); border-radius: 20px; opacity: 1;
+    transition-duration: 520ms, 520ms, 520ms, 200ms; }
+  .inner { width: 338px; margin-left: auto; opacity: 0; transform: scale(0.97); transform-origin: top right;
+    transition: opacity 140ms ease, transform 140ms ease; }
+  .open .inner { opacity: 1; transform: none; transition: opacity 320ms ease 140ms, transform 520ms var(--ease) 140ms; }
+
+  .head { height: 48px; padding: 2px 16px 0; display: flex; align-items: center; }
+  .title { font: 400 11px var(--display); letter-spacing: 0.2em; text-transform: uppercase; }
+
+  /* section label: name, a hairline that runs to the right edge, then a status word */
+  .sec { display: flex; align-items: center; gap: 10px; height: 28px; padding: 6px 16px 0; font: 400 9px var(--display); letter-spacing: 0.2em; text-transform: uppercase; color: var(--muted); }
+  .sec::after { content: ""; order: 1; flex: 1; height: 1px; background: var(--border); opacity: 0.7; }
+  .sec .st { order: 2; letter-spacing: 0.16em; }
+  .sec .st.live { color: var(--accent-text); }
+  .sec .st.muted { color: var(--danger-text); }
+  .sec .st.none { color: var(--muted); opacity: 0.8; }
+  .sec.gap { height: 40px; padding-top: 18px; }
+
+  /* ---------- volume row: mute button, segmented gauge, readout ---------- */
+  .vrow { display: flex; align-items: center; gap: 12px; height: 40px; padding: 0 16px; }
+  .mbtn {
+    width: 26px; height: 26px; flex: none; display: grid; place-items: center; cursor: pointer;
+    background: transparent; border: 1px solid var(--border); border-radius: 3px; color: var(--muted);
+    transition: color 140ms, border-color 140ms;
+  }
+  .mbtn:hover { color: var(--text); border-color: var(--muted); }
+  .mbtn svg { width: 15px; height: 15px; }
+  .off .mbtn { color: var(--danger-text); border-color: var(--danger); }
+
+  .gauge { position: relative; flex: 1; height: 24px; display: flex; align-items: center; gap: 2px; cursor: pointer; touch-action: none; outline: 0; }
+  .cell { flex: 1; height: 12px; background: var(--cell-off); border-radius: 1px; transition: background-color 120ms; }
+  .cell.on { background: var(--text); }
+  .cell.lead { background: var(--accent); box-shadow: 0 0 0 1px var(--accent-dim); }
+  .cell.ghost { background: rgba(232, 230, 227, 0.28); }
+  .off .cell.on { background: #4a494e; }
+  .off .cell.lead { background: #4a494e; box-shadow: none; }
+  .gauge:focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; }
+
+  .val { width: 46px; text-align: right; font: 500 13px var(--display); font-variant-numeric: tabular-nums; }
+  .val small { font-size: 9px; color: var(--muted); margin-left: 1px; }
+  .off .val { font-size: 11px; letter-spacing: 0.14em; color: var(--danger-text); }
+
+  /* ---------- device rows: framed icon, name, status word ---------- */
+  .dev { display: flex; align-items: center; gap: 12px; height: 48px; padding: 0 16px; cursor: pointer; transition: background-color 120ms; outline: 0; }
+  .dev:hover, .dev:focus-visible { background: rgba(232, 230, 227, 0.035); }
+  .dev:focus-visible { box-shadow: inset 0 0 0 2px var(--accent); }
+  .ico { width: 30px; height: 30px; flex: none; display: grid; place-items: center; border: 1px solid var(--border); border-radius: 3px; color: var(--muted); transition: color 140ms, border-color 140ms, background-color 140ms; }
+  .ico svg { width: 16px; height: 16px; }
+  .dev:hover .ico { color: var(--text); border-color: var(--muted); }
+  .dev.cur .ico { color: var(--text); border-color: var(--accent); background: var(--accent-dim); }
+  .main { flex: 1; min-width: 0; }
+  .name { font-size: 13px; font-weight: 500; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .sub { margin-top: 1px; font-size: 11px; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .tag { font: 400 8.5px var(--display); letter-spacing: 0.18em; text-transform: uppercase; color: var(--accent-text); opacity: 0; transition: opacity 140ms; }
+  .dev.cur .tag { opacity: 1; }
+  .none-note { padding: 4px 16px 10px; font-size: 12px; color: var(--muted); opacity: 0.75; }
+  .tail { height: 8px; }
+
+  .hint { position: fixed; left: 16px; right: 16px; bottom: 14px; text-align: center; font-size: 12px; color: rgba(232, 230, 227, 0.7); }
+  .hint kbd { font: inherit; color: var(--text); }
+
+  .static .hint { display: none; }
+  .static *, .static *::before, .static *::after { transition: none !important; animation: none !important; }
+  @media (prefers-reduced-motion: reduce) { * { transition-duration: 1ms !important; transition-delay: 0ms !important; } }
+</style>
+</head>
+<body id="root">
+<div class="wall"></div>
+<div class="cap" aria-hidden="true"></div>
+
+<section class="panel" id="panel" aria-label="Sound">
+  <div class="inner" id="inner">
+    <div class="head"><div class="title">Sound</div></div>
+    <div id="body"></div>
+  </div>
+</section>
+
+<p class="hint">Prototype · drag or click the gauge (hover previews the level) · <kbd>←</kbd><kbd>→</kbd> on a focused gauge · <kbd>M</kbd> mute output · <kbd>I</kbd> cycles the microphone on / muted / no signal · <kbd>Esc</kbd> closes · data is mock</p>
+
+<script>
+(() => {
+  const $ = id => document.getElementById(id);
+  const esc = s => String(s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+  const ICON = {
+    monitor: '<svg viewBox="0 0 24 24"><rect x="3" y="4.5" width="18" height="12" rx="1.5"/><path d="M8.5 20h7M12 16.5V20"/></svg>',
+    spkHi:   '<svg viewBox="0 0 24 24"><path d="M4 9.5v5h4l5 4v-13l-5 4zM16.5 9a4 4 0 0 1 0 6M19 6.5a8 8 0 0 1 0 11"/></svg>',
+    spkOff:  '<svg viewBox="0 0 24 24"><path d="M4 9.5v5h4l5 4v-13l-5 4zM17 9.5l4 5M21 9.5l-4 5"/></svg>',
+    phones:  '<svg viewBox="0 0 24 24"><path d="M4 15v-3a8 8 0 0 1 16 0v3"/><rect x="3" y="14" width="4" height="6" rx="1.2"/><rect x="17" y="14" width="4" height="6" rx="1.2"/></svg>',
+    micOn:   '<svg viewBox="0 0 24 24"><rect x="9" y="3" width="6" height="11" rx="3"/><path d="M5.5 11a6.5 6.5 0 0 0 13 0M12 17.5V21"/></svg>',
+    micOff:  '<svg viewBox="0 0 24 24"><path d="M9 6.2V6a3 3 0 0 1 6 0v5M15 12.4A3 3 0 0 1 9 11V9.5M5.5 11a6.5 6.5 0 0 0 10.4 5.2M18.5 11a6.5 6.5 0 0 1-.8 3.1M12 17.5V21M3.5 3.5l17 17"/></svg>',
+    webcam:  '<svg viewBox="0 0 24 24"><circle cx="12" cy="9.5" r="6"/><circle cx="12" cy="9.5" r="2.2"/><path d="M8 21h8M12 15.5V21"/></svg>',
+  };
+  const CELLS = 22;
+
+  const S = {
+    out: { vol: 74, muted: false, cur: 'analog', devs: [
+      { id: 'hdmi',   name: 'HDMI / DisplayPort',        sub: 'Navi 31 HDMI/DP Audio', icon: ICON.monitor },
+      { id: 'analog', name: 'Built-in Audio Analog Stereo', sub: 'Analog',            icon: ICON.spkHi },
+      { id: 'bt',     name: 'WH-1000XM5',                sub: 'Bluetooth',             icon: ICON.phones } ] },
+    inp: { vol: 100, muted: false, cur: 'mic', devs: [
+      { id: 'mic',    name: 'Built-in Audio Analog Stereo', sub: 'Analog',            icon: ICON.micOn },
+      { id: 'webcam', name: 'Webcam C920',               sub: 'USB',                   icon: ICON.webcam } ] },
+  };
+  let hoverPct = null;
+  const micState = () => S.inp.devs.length === 0 ? 'missing' : S.inp.muted ? 'muted' : 'on';
+
+  function gauge(kind) {
+    const g = S[kind], off = g.muted, lit = off ? Math.round(g.vol / 100 * CELLS) : Math.round(g.vol / 100 * CELLS);
+    const ghost = hoverPct == null ? -1 : Math.round(hoverPct / 100 * CELLS);
+    let html = '';
+    for (let i = 0; i < CELLS; i++) {
+      const on = i < lit, lead = on && i === lit - 1, gh = !on && i < ghost;
+      html += `<i class="cell${on ? ' on' : ''}${lead ? ' lead' : ''}${gh ? ' ghost' : ''}"></i>`;
+    }
+    return html;
+  }
+  function volRow(kind) {
+    const g = S[kind], off = g.muted, isOut = kind === 'out';
+    const icon = isOut ? (off || g.vol === 0 ? ICON.spkOff : ICON.spkHi) : (off ? ICON.micOff : ICON.micOn);
+    return `<div class="vrow${off ? ' off' : ''}" data-kind="${kind}">
+      <button class="mbtn" type="button" data-mute="${kind}" aria-label="${off ? 'Unmute' : 'Mute'} ${isOut ? 'output' : 'input'}">${icon}</button>
+      <div class="gauge" tabindex="0" role="slider" aria-label="${isOut ? 'Output' : 'Input'} volume" aria-valuemin="0" aria-valuemax="100" aria-valuenow="${g.vol}" data-gauge="${kind}">${gauge(kind)}</div>
+      <div class="val">${off ? 'MUTE' : g.vol + '<small>%</small>'}</div></div>`;
+  }
+  function devs(kind) {
+    const g = S[kind];
+    if (!g.devs.length) return '<div class="none-note">No input device recognised.</div>';
+    return g.devs.map(d => `<div class="dev${d.id === g.cur ? ' cur' : ''}" data-kind="${kind}" data-id="${d.id}" role="button" tabindex="0">
+      <span class="ico">${d.icon}</span><span class="main"><div class="name">${esc(d.name)}</div><div class="sub">${esc(d.sub)}</div></span><span class="tag">Active</span></div>`).join('');
+  }
+  function render() {
+    const ms = micState();
+    const outStatus = S.out.muted ? '<span class="st muted">Muted</span>' : `<span class="st">${S.out.devs.length} devices</span>`;
+    const inStatus = ms === 'on' ? '<span class="st live">Live</span>' : ms === 'muted' ? '<span class="st muted">Muted</span>' : '<span class="st none">No signal</span>';
+    $('body').innerHTML =
+      `<div class="sec">Output${outStatus}</div>${volRow('out')}${devs('out')}` +
+      `<div class="sec gap">Input${inStatus}</div>${ms === 'missing' ? '' : volRow('inp')}${devs('inp')}<div class="tail"></div>`;
+    $('panel').style.setProperty('--h', ($('inner').offsetHeight + 2) + 'px');
+  }
+
+  const clamp = v => Math.max(0, Math.min(100, Math.round(v)));
+  function setVol(kind, v) { S[kind].vol = clamp(v); if (S[kind].vol > 0) S[kind].muted = false; }
+  const key = k => k === 'inp' ? 'inp' : 'out';
+  const pctAt = (el, e) => { const r = el.getBoundingClientRect(); return clamp((e.clientX - r.left) / r.width * 100); };
+  let drag = null;
+
+  $('body').addEventListener('pointerdown', e => {
+    const g = e.target.closest('.gauge'); if (!g) return;
+    drag = g.dataset.gauge; g.setPointerCapture(e.pointerId); setVol(drag, pctAt(g, e)); hoverPct = null; render();
+    $('body').querySelector(`[data-gauge="${drag}"]`).focus({ preventScroll: true });
+  });
+  $('body').addEventListener('pointermove', e => {
+    const g = e.target.closest('.gauge');
+    if (drag) { const el = $('body').querySelector(`[data-gauge="${drag}"]`); setVol(drag, pctAt(el, e)); render(); $('body').querySelector(`[data-gauge="${drag}"]`).focus({ preventScroll: true }); return; }
+    if (g) { hoverPct = pctAt(g, e); const k = g.dataset.gauge; paintGhost(g, k); } else if (hoverPct != null) { hoverPct = null; render(); }
+  });
+  function paintGhost(g, kind) {                 // cheap repaint of the cells only, so the hover never rebuilds the panel
+    g.innerHTML = gauge(kind);
+  }
+  $('body').addEventListener('pointerup', () => { drag = null; });
+  $('body').addEventListener('pointerleave', () => { if (hoverPct != null) { hoverPct = null; render(); } });
+  $('body').addEventListener('keydown', e => {
+    const g = e.target.closest('.gauge');
+    if (g && (e.key === 'ArrowLeft' || e.key === 'ArrowRight')) {
+      e.preventDefault(); const k = g.dataset.gauge; setVol(k, S[k].vol + (e.key === 'ArrowRight' ? 5 : -5)); render();
+      $('body').querySelector(`[data-gauge="${k}"]`).focus({ preventScroll: true });
+    } else if ((e.key === 'Enter' || e.key === ' ') && e.target.matches('.dev')) { e.preventDefault(); e.target.click(); }
+  });
+  $('body').addEventListener('click', e => {
+    const m = e.target.closest('[data-mute]'); if (m) { const k = key(m.dataset.mute); S[k].muted = !S[k].muted; render(); return; }
+    const r = e.target.closest('.dev'); if (!r) return;
+    S[r.dataset.kind].cur = r.dataset.id; render();
+  });
+  addEventListener('keydown', e => {
+    if (e.ctrlKey || e.metaKey || e.altKey || e.target.closest?.('#body')) return;
+    const k = e.key.toLowerCase();
+    if (k === 'm') { S.out.muted = !S.out.muted; render(); }
+    else if (k === 'i') {
+      if (micState() === 'on') S.inp.muted = true;
+      else if (micState() === 'muted') { S.inp.muted = false; S.inp._d = S.inp.devs; S.inp.devs = []; }
+      else S.inp.devs = S.inp._d || S.inp.devs;
+      render();
+    } else if (k === 'escape') $('panel').classList.remove('open');
+  });
+
+  render();
+  const h = location.hash.slice(1);
+  if (h) document.body.classList.add('static');
+  if (h === 'muted') S.out.muted = true;
+  if (h === 'mic-muted') S.inp.muted = true;
+  if (h === 'mic-missing') { S.inp._d = S.inp.devs; S.inp.devs = []; }
+  if (h === 'low') S.out.vol = 18;
+  if (h) render();
+  if (h) $('panel').classList.add('open');
+  else requestAnimationFrame(() => requestAnimationFrame(() => $('panel').classList.add('open')));
+})();
+</script>
+</body>
+</html>

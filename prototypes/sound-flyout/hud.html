@@ -1,0 +1,123 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>TK-421 · Volume HUD</title>
+<style>
+  /* Same concept as prototypes/sound-flyout/index.html, applied to the island's volume HUD (pill, 300 x 44):
+     the thin slider becomes the segmented power-cell gauge, the readout is Orbitron, mute is a status word. */
+  :root {
+    color-scheme: dark;
+    --bg: #050505;
+    --surface: #0c0b0d;
+    --text: #e8e6e3;
+    --muted: #8e8b88;
+    --accent: #506a9b;
+    --accent-dim: #29384f;
+    --danger: #a14d55;
+    --danger-text: #d9808a;
+    --border: #3f3e44;
+    --cell-off: #26252a;
+    --cell-muted: #4a494e;
+
+    --ease: cubic-bezier(0.22, 1, 0.36, 1);
+    --display: "Orbitron", "Geist", ui-sans-serif, sans-serif;
+    --ui: "Geist", ui-sans-serif, system-ui, sans-serif;
+  }
+  * { box-sizing: border-box; margin: 0; }
+  html, body { height: 100%; background: var(--bg); }
+  body { font-family: var(--ui); color: var(--text); overflow: hidden; -webkit-font-smoothing: antialiased; }
+  svg { display: block; fill: none; stroke: currentColor; stroke-width: 1.7; stroke-linecap: round; stroke-linejoin: round; }
+  .wall { position: fixed; inset: 0; background: url("../dynamic-island/wallpaper.jpg") center / cover no-repeat; filter: brightness(0.8); }
+
+  /* the island in its HUD state; idle is the 108 x 28 pill */
+  .island {
+    position: fixed; top: 1px; left: 50%; transform: translateX(-50%);
+    width: 108px; height: 28px; border-radius: 14px;
+    background: var(--surface); border: 1px solid var(--border); box-shadow: 0 1px 2px rgba(0, 0, 0, 0.5);
+    overflow: hidden;
+    transition: width 340ms var(--ease), height 340ms var(--ease), border-radius 340ms var(--ease);
+  }
+  .hud .island { width: 300px; height: 44px; border-radius: 22px; }
+
+  .row { position: absolute; inset: 0; display: flex; align-items: center; gap: 12px; padding: 0 20px;
+         opacity: 0; transition: opacity 120ms ease; pointer-events: none; }
+  .hud .row { opacity: 1; transition: opacity 240ms ease 120ms; }
+
+  .ico { width: 18px; height: 18px; flex: none; color: var(--text); transition: color 140ms; }
+  .ico svg { width: 18px; height: 18px; }
+  .off .ico { color: var(--danger-text); }
+
+  .gauge { flex: 1; height: 12px; display: flex; gap: 2px; }
+  .cell { flex: 1; background: var(--cell-off); border-radius: 1px; transition: background-color 120ms; }
+  .cell.on { background: var(--text); }
+  .cell.lead { background: var(--accent); box-shadow: 0 0 0 1px var(--accent-dim); }
+  .off .cell.on, .off .cell.lead { background: var(--cell-muted); box-shadow: none; }
+
+  .val { width: 44px; text-align: right; font: 500 13px var(--display); font-variant-numeric: tabular-nums; white-space: nowrap; }
+  .val small { font-size: 9px; color: var(--muted); margin-left: 1px; }
+  .off .val { font-size: 11px; letter-spacing: 0.14em; color: var(--danger-text); }
+
+  .hint { position: fixed; left: 16px; right: 16px; bottom: 14px; text-align: center; font-size: 12px; color: rgba(232, 230, 227, 0.7); }
+  .hint kbd { font: inherit; color: var(--text); }
+  .static .hint { display: none; }
+  .static *, .static *::before, .static *::after { transition: none !important; }
+  @media (prefers-reduced-motion: reduce) { * { transition-duration: 1ms !important; transition-delay: 0ms !important; } }
+</style>
+</head>
+<body id="root">
+<div class="wall"></div>
+
+<div class="island" aria-live="polite">
+  <div class="row" id="row"></div>
+</div>
+
+<p class="hint">Prototype · <kbd>↑</kbd><kbd>↓</kbd> volume · <kbd>M</kbd> mute · the HUD hides itself after 1.6 s, as in the shell</p>
+
+<script>
+(() => {
+  const $ = id => document.getElementById(id);
+  const root = document.body, CELLS = 20;
+  const ICON = {
+    hi:  '<svg viewBox="0 0 24 24"><path d="M4 9.5v5h4l5 4v-13l-5 4zM16.5 9a4 4 0 0 1 0 6M19 6.5a8 8 0 0 1 0 11"/></svg>',
+    off: '<svg viewBox="0 0 24 24"><path d="M4 9.5v5h4l5 4v-13l-5 4zM17 9.5l4 5M21 9.5l-4 5"/></svg>',
+  };
+  let vol = 59, muted = false, timer = null;
+  const clamp = v => Math.max(0, Math.min(100, v));
+
+  function paint() {
+    const off = muted || vol === 0, lit = Math.round(vol / 100 * CELLS);
+    let cells = '';
+    for (let i = 0; i < CELLS; i++) cells += `<i class="cell${i < lit ? ' on' : ''}${i === lit - 1 ? ' lead' : ''}"></i>`;
+    $('row').className = 'row' + (off ? ' off' : '');
+    $('row').innerHTML = `<span class="ico">${off ? ICON.off : ICON.hi}</span><div class="gauge">${cells}</div>` +
+      `<div class="val">${muted ? 'MUTE' : vol + '<small>%</small>'}</div>`;
+  }
+  function show() {
+    paint(); root.classList.add('hud');
+    clearTimeout(timer); timer = setTimeout(() => root.classList.remove('hud'), 1600);
+  }
+  addEventListener('keydown', e => {
+    if (e.ctrlKey || e.metaKey || e.altKey) return;
+    const k = e.key;
+    if (k === 'ArrowUp' || k === 'ArrowDown') { e.preventDefault(); muted = false; vol = clamp(vol + (k === 'ArrowUp' ? 5 : -5)); show(); }
+    else if (k.toLowerCase() === 'm') { muted = !muted; show(); }
+  });
+
+  paint();
+  const h = location.hash.slice(1);
+  if (h) {
+    root.classList.add('static');
+    if (h === 'low') vol = 12;
+    if (h === 'max') vol = 100;
+    if (h === 'zero') vol = 0;
+    if (h === 'muted') muted = true;
+    paint(); root.classList.add('hud');
+  } else {
+    setTimeout(show, 400);
+  }
+})();
+</script>
+</body>
+</html>

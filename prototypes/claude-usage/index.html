@@ -1,0 +1,192 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>TK-421 · Claude usage</title>
+<style>
+  /* Bar capsule + dropdown card for the plan limits (5 h session, 7 d week).
+     Same language as the approved launcher: graphite and steel only, no hue, translucent surface with the light
+     Hyprland blur, 16 px card / 14 px capsule radius, Orbitron for labels and digits, Geist for text.
+     Keys (prototype only): 1 normal · 2 almost full · 3 offline · click the capsule or press Space to open/close. */
+  :root {
+    color-scheme: dark;
+    --bg: #050505;
+    --surface: #0c0b0d;
+    --surface-alt: #1a1a21;
+    --text: #e8e6e3;
+    --muted: #8e8b88;
+    --steel: #b9b6b2;
+    --bright: #f2f0ed;
+    --border: #3f3e44;
+    --ease: cubic-bezier(0.22, 1, 0.36, 1);
+    --display: "Orbitron", "Geist", ui-sans-serif, sans-serif;
+    --ui: "Geist", ui-sans-serif, system-ui, sans-serif;
+  }
+
+  * { box-sizing: border-box; margin: 0; }
+  html, body { height: 100%; background: var(--bg); }
+  body { font-family: var(--ui); color: var(--text); overflow: hidden; -webkit-font-smoothing: antialiased; }
+  svg { display: block; fill: none; stroke: currentColor; stroke-width: 1.5; stroke-linecap: square; stroke-linejoin: miter; }
+
+  .wall { position: fixed; inset: 0; background: url("wallpaper.jpg") center / cover no-repeat; filter: brightness(0.8); }
+
+  /* ---------- context: the bar's right-hand capsule row (the bar is still being built) ---------- */
+  .cap {
+    position: fixed; top: 4px; height: 28px; display: flex; align-items: center;
+    background: var(--surface); border: 1px solid var(--border); border-radius: 14px;
+  }
+  .cap.left { left: 30px; padding: 0 12px; font: 500 10px/28px var(--display); letter-spacing: 0.4px; color: #b5bac3; }
+
+  /* ---------- the widget capsule ---------- */
+  .cap.usage {
+    right: 30px; padding: 0 12px 0 10px; gap: 9px; cursor: pointer; user-select: none;
+    background: rgba(12, 11, 13, 0.72); backdrop-filter: blur(6px);
+    transition: border-color 160ms, background-color 160ms;
+  }
+  .cap.usage:hover, .open .cap.usage { border-color: #5a5961; }
+  .cap.usage svg.logo { width: 14px; height: 14px; color: var(--steel); }
+  .pct { font: 500 10px/1 var(--display); letter-spacing: 0.4px; color: var(--text); font-variant-numeric: tabular-nums; position: relative; top: 0.5px; }
+  .pct small { font-size: 8px; color: var(--muted); margin-left: 1px; }
+
+  /* meter: thin track with a tick every 25 % */
+  .meter { position: relative; height: 3px; border-radius: 2px; background: #26252b; overflow: hidden; }
+  .meter i { position: absolute; left: 0; top: 0; bottom: 0; background: var(--steel); border-radius: 2px; transition: width 700ms var(--ease), background-color 300ms; }
+  .meter.hot i { background: var(--bright); }
+  .meter b { position: absolute; top: 0; bottom: 0; width: 1px; background: var(--surface); opacity: 0.9; }
+  .meter b:nth-of-type(1) { left: 25%; } .meter b:nth-of-type(2) { left: 50%; } .meter b:nth-of-type(3) { left: 75%; }
+  .cap.usage .meter { width: 38px; }
+
+  .off .cap.usage .logo, .off .cap.usage .pct { color: var(--muted); }
+  .off .cap.usage .meter i { width: 0 !important; }
+
+  /* ---------- the card ---------- */
+  .card {
+    position: fixed; top: 40px; right: 30px; width: 300px; padding: 14px 16px 12px;
+    background: rgba(12, 11, 13, 0.72); backdrop-filter: blur(6px);
+    border: 1px solid var(--border); border-radius: 16px;
+    box-shadow: 0 24px 56px -14px rgba(0, 0, 0, 0.85);
+    opacity: 0; visibility: hidden; transform: translateY(-6px);
+    transition: opacity 120ms ease, transform 200ms var(--ease), visibility 0s 200ms;
+  }
+  .open .card { opacity: 1; visibility: visible; transform: none; transition: opacity 180ms ease, transform 320ms var(--ease); }
+
+  .head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 14px; }
+  .head h1 { display: flex; align-items: center; gap: 9px; font: 500 10px/1 var(--display); letter-spacing: 0.24em; color: var(--text); }
+  .head h1 svg { width: 15px; height: 15px; color: var(--steel); }
+  .head span { font: 500 9px/1 var(--display); letter-spacing: 0.24em; color: var(--muted); opacity: 0.6; }
+
+  .row + .row { margin-top: 14px; }
+  .row .top { display: flex; align-items: baseline; justify-content: space-between; margin-bottom: 8px; }
+  .row .label { font: 500 9px/1 var(--display); letter-spacing: 0.22em; color: var(--muted); }
+  .row .value { font: 500 17px/1 var(--display); letter-spacing: 0.02em; color: var(--text); font-variant-numeric: tabular-nums; }
+  .row .value small { font-size: 10px; color: var(--muted); margin-left: 2px; }
+  .row .meter { height: 5px; border-radius: 3px; }
+  .row .meter i { border-radius: 3px; }
+  .row .reset { margin-top: 8px; font-size: 12px; color: var(--muted); }
+  .row .reset b { font-weight: 500; color: #c9c7c4; font-variant-numeric: tabular-nums; }
+
+  .foot { display: flex; align-items: center; justify-content: space-between; margin-top: 16px; padding-top: 10px; border-top: 1px solid var(--border); font-size: 11.5px; color: var(--muted); }
+  .foot button { display: inline-flex; align-items: center; gap: 6px; background: none; border: 0; padding: 3px 6px; margin: -3px -6px; border-radius: 7px; color: var(--muted); font: inherit; cursor: pointer; transition: color 140ms, background-color 140ms; }
+  .foot button:hover { color: var(--text); background: var(--surface-alt); }
+  .foot button svg { width: 12px; height: 12px; }
+  .spin svg { animation: spin 700ms linear; }
+  @keyframes spin { to { transform: rotate(360deg); } }
+
+  /* offline state */
+  .err { display: none; }
+  .off .err { display: block; }
+  .off .rows { display: none; }
+  .err b { display: block; font: 500 10px/1 var(--display); letter-spacing: 0.26em; color: var(--muted); }
+  .err p { margin-top: 10px; font-size: 13px; line-height: 1.45; color: var(--muted); opacity: 0.85; }
+
+  .hint { position: fixed; left: 20px; bottom: 20px; font-size: 12px; color: #b5bac3; opacity: 0.7; text-shadow: 0 1px 3px #000; }
+</style>
+</head>
+<body>
+<div class="wall"></div>
+<div class="cap left"><span>TK-421</span></div>
+
+<div class="cap usage" id="cap" role="button" aria-label="Claude usage" aria-expanded="false">
+  <!-- Claude-style spark, authored line icon -->
+  <svg class="logo" viewBox="0 0 24 24"><path d="M12 3v18M3 12h18M5.6 5.6l12.8 12.8M18.4 5.6 5.6 18.4"/></svg>
+  <span class="pct" id="capPct">42<small>%</small></span>
+  <span class="meter" id="capMeter"><i id="capFill" style="width:42%"></i><b></b><b></b><b></b></span>
+</div>
+
+<div class="card" role="dialog" aria-label="Claude usage">
+  <div class="head">
+    <h1><svg viewBox="0 0 24 24"><path d="M12 3v18M3 12h18M5.6 5.6l12.8 12.8M18.4 5.6 5.6 18.4"/></svg>CLAUDE</h1>
+    <span>PLAN LIMITS</span>
+  </div>
+
+  <div class="rows">
+    <div class="row">
+      <div class="top"><span class="label">SESSION · 5 H</span><span class="value" id="v5">42<small>%</small></span></div>
+      <div class="meter" id="m5"><i id="f5" style="width:42%"></i><b></b><b></b><b></b></div>
+      <div class="reset">Resets in <b id="r5">2 h 14 min</b></div>
+    </div>
+    <div class="row">
+      <div class="top"><span class="label">WEEK · 7 D</span><span class="value" id="v7">68<small>%</small></span></div>
+      <div class="meter" id="m7"><i id="f7" style="width:68%"></i><b></b><b></b><b></b></div>
+      <div class="reset">Resets <b id="r7">Thu 09:00</b></div>
+    </div>
+  </div>
+
+  <div class="err">
+    <b>OFFLINE</b>
+    <p id="errText">Could not read the plan limits. Check that Claude Code is signed in, then refresh.</p>
+  </div>
+
+  <div class="foot">
+    <span id="updated">Updated 12 s ago</span>
+    <button id="refresh" type="button"><svg viewBox="0 0 24 24"><path d="M20 12a8 8 0 1 1-2.3-5.7"/><path d="M20 4v5h-5"/></svg>Refresh</button>
+  </div>
+</div>
+
+<div class="hint">Click the capsule or press Space · 1 normal · 2 almost full · 3 offline</div>
+
+<script>
+  const $ = (s) => document.querySelector(s);
+  const body = document.body;
+
+  const STATES = {
+    1: { s5: 42, s7: 68, r5: "2 h 14 min", r7: "Thu 09:00" },
+    2: { s5: 93, s7: 88, r5: "38 min",     r7: "Wed 09:00" },
+  };
+
+  function paint(v, p) { $(`#v${v}`).innerHTML = `${p}<small>%</small>`; $(`#f${v}`).style.width = p + "%"; $(`#m${v}`).classList.toggle("hot", p >= 80); }
+
+  function setState(n) {
+    body.classList.toggle("off", n === 3);
+    if (n === 3) { $("#capPct").innerHTML = `--`; $("#updated").textContent = "Last read 14 min ago"; return; }
+    const d = STATES[n];
+    paint(5, d.s5); paint(7, d.s7);
+    $("#r5").textContent = d.r5; $("#r7").textContent = d.r7;
+    // the capsule shows the tighter of the two limits
+    const worst = Math.max(d.s5, d.s7);
+    $("#capPct").innerHTML = `${worst}<small>%</small>`;
+    $("#capFill").style.width = worst + "%";
+    $("#capMeter").classList.toggle("hot", worst >= 80);
+    $("#updated").textContent = "Updated just now";
+  }
+
+  function toggle() { const o = body.classList.toggle("open"); $("#cap").setAttribute("aria-expanded", o); }
+  $("#cap").addEventListener("click", (e) => { e.stopPropagation(); toggle(); });
+  document.addEventListener("click", (e) => { if (body.classList.contains("open") && !e.target.closest(".card")) toggle(); });
+  $("#refresh").addEventListener("click", (e) => {
+    const b = e.currentTarget; b.classList.remove("spin"); void b.offsetWidth; b.classList.add("spin");
+    $("#updated").textContent = "Updated just now";
+  });
+  addEventListener("keydown", (e) => {
+    if (e.key === " ") { e.preventDefault(); toggle(); }
+    else if (e.key === "Escape" && body.classList.contains("open")) toggle();
+    else if (STATES[e.key] || e.key === "3") setState(+e.key);
+  });
+
+  const q = new URLSearchParams(location.search);
+  setState(+(q.get("state") || 1));
+  if (q.get("open") !== "0") body.classList.add("open");
+</script>
+</body>
+</html>

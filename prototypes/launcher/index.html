@@ -1,0 +1,213 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>TK-421 · Launcher (minimal)</title>
+<style>
+  /* v2, minimal. Removed from v1: title strip, footer key hints, kind column, result counter, coloured icon tiles.
+     What stays of TK-421: Imperial palette, 16 px panel radius, a Death Star line icon as the mark, Orbitron command voice, no hue at all, only graphite and steel,
+     one accent hairline, Orbitron only for the tiny wordmark, no blur or glow.
+     --accent-text is the only addition to the palette (lighter tint of --accent for readable highlights). */
+  :root {
+    color-scheme: dark;
+    --bg: #050505;
+    --surface: #0c0b0d;
+    --surface-alt: #1a1a21;
+    --text: #e8e6e3;
+    --muted: #8e8b88;
+    --accent: #b9b6b2;      /* brushed steel: selection rail, focus line */
+    --accent-text: #f2f0ed; /* near-white for highlights */
+    --border: #3f3e44;
+
+    --panel-w: 480px;
+    --row-h: 38px;
+    --radius: 16px;      /* panel; rows 10 px, icons 6 px. Island card is 22 px, bar capsules 14 px. */
+    --ease: cubic-bezier(0.22, 1, 0.36, 1);
+    --display: "Orbitron", "Geist", ui-sans-serif, sans-serif;
+    --ui: "Geist", ui-sans-serif, system-ui, sans-serif;
+  }
+
+  * { box-sizing: border-box; margin: 0; }
+  html, body { height: 100%; background: var(--bg); }
+  body { font-family: var(--ui); color: var(--text); overflow: hidden; -webkit-font-smoothing: antialiased; }
+  ::selection { background: #3f3e44; color: var(--text); }
+
+  .wall { position: fixed; inset: 0; background: url("wallpaper.jpg") center / cover no-repeat; filter: brightness(0.8); }
+  .scrim { position: fixed; inset: 0; background: rgba(5, 5, 5, 0.35); opacity: 0; transition: opacity 200ms ease; pointer-events: none; }
+  .open .scrim { opacity: 1; pointer-events: auto; }
+
+  .cap {   /* context only: the real bar capsule */
+    position: fixed; top: 4px; left: 30px; height: 28px; padding: 0 12px;
+    display: flex; align-items: center;
+    background: var(--surface); border: 1px solid var(--border); border-radius: 14px;
+    font: 500 10px/28px var(--display); letter-spacing: 0.4px; color: #b5bac3;
+  }
+
+  /* ---------- panel ---------- */
+  .launcher {
+    position: fixed; left: 50%; top: 24vh; width: var(--panel-w);
+    transform: translateX(-50%) translateY(-6px);
+    /* translucent surface + the same light blur Hyprland already runs (size 3, 1 pass) */
+    background: rgba(12, 11, 13, 0.72); backdrop-filter: blur(6px);
+    border: 1px solid var(--border); border-radius: var(--radius);
+    box-shadow: 0 24px 56px -14px rgba(0, 0, 0, 0.85);
+    overflow: hidden; opacity: 0; visibility: hidden;
+    transition: opacity 120ms ease, transform 200ms var(--ease), visibility 0s 200ms;
+  }
+  .open .launcher { opacity: 1; visibility: visible; transform: translateX(-50%); transition: opacity 180ms ease, transform 320ms var(--ease); }
+
+  .search { position: relative; display: flex; align-items: center; gap: 12px; height: 52px; padding: 0 18px; }
+  .prompt { flex: none; fill: none; stroke: currentColor; stroke-width: 1.5; stroke-linecap: square; stroke-linejoin: miter; color: var(--muted); transition: color 140ms; }
+  .search:focus-within .prompt { color: var(--text); }
+  .search input {
+    flex: 1; min-width: 0; height: 100%; background: transparent; border: 0; outline: 0;
+    font: 400 16px/1 var(--ui); color: var(--text); caret-color: var(--text);
+  }
+  .search input::placeholder { font: 500 11px/1 var(--display); letter-spacing: 0.26em; color: var(--muted); opacity: 0.55; }
+  .tag { font: 500 9px/1 var(--display); letter-spacing: 0.24em; color: var(--muted); opacity: 0.6; }
+  .search::after {   /* the only decoration: accent hairline that draws in under the input */
+    content: ""; position: absolute; left: 0; right: 0; bottom: 0; height: 1px; background: var(--accent);
+    transform: scaleX(0); transform-origin: left; transition: transform 360ms var(--ease);
+  }
+  .search:focus-within::after { transform: scaleX(1); }
+  .list:empty + * , .list:empty { display: none; }
+
+  /* ---------- results ---------- */
+  .list { max-height: calc(var(--row-h) * 6 + 16px); overflow-y: auto; padding: 2px 8px 8px; scrollbar-width: none; }
+  .row {
+    position: relative; display: flex; align-items: center; gap: 14px; height: var(--row-h); padding: 0 10px; border-radius: 10px; cursor: default;
+    transition: background-color 140ms;
+  }
+  .row.sel { background: var(--surface-alt); }
+  .row::before {   /* 2 px selection rail, no filled bar */
+    content: ""; position: absolute; left: 0; top: 11px; bottom: 11px; width: 2px; border-radius: 2px; background: var(--accent);
+    transform: scaleY(0); transition: transform 180ms var(--ease);
+  }
+  .row.sel::before { transform: scaleY(1); }
+  .ico {   /* monochrome glyph tile; becomes accent when selected. Real icons are a one-line swap in QML. */
+    width: 22px; height: 22px; border-radius: 6px; display: grid; place-items: center; flex: none;
+    background: var(--surface-alt); color: var(--muted); font: 600 9.5px/1 var(--ui);
+    transition: color 140ms, background-color 140ms;
+  }
+  .row.sel .ico { color: var(--text); background: var(--bg); }
+  .name { font-size: 14.5px; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; transition: color 140ms; }
+  .row.sel .name { color: var(--text); }
+  .name mark { background: none; color: var(--text); font-weight: 600; }
+  .row.sel .name mark { color: #fff; font-weight: 700; }
+  .idx { margin-left: auto; font: 500 9px/1 var(--display); letter-spacing: 0.2em; color: var(--muted); opacity: 0.4; font-variant-numeric: tabular-nums; transition: opacity 140ms, color 140ms; }
+  .row.sel .idx { opacity: 0.9; color: var(--text); }
+  .row.go .ico { animation: go 360ms var(--ease); }
+  @keyframes go { 40% { transform: scale(0.85); } }
+
+  .empty { padding: 14px 10px 16px; font: 500 10px/1 var(--display); letter-spacing: 0.26em; color: var(--muted); }
+  .empty span { display: block; margin-top: 10px; font: 400 13px/1 var(--ui); letter-spacing: 0; opacity: 0.75; }
+
+  /* ---------- prototype-only ---------- */
+  .status {
+    position: fixed; left: 50%; bottom: 28px; transform: translateX(-50%);
+    padding: 8px 14px; background: var(--surface); border: 1px solid var(--border); border-radius: 14px;
+    font: 500 10px/1 var(--display); letter-spacing: 0.2em; text-transform: uppercase; color: var(--muted);
+    opacity: 0; transition: opacity 200ms; pointer-events: none;
+  }
+  .status.show { opacity: 1; }
+  .status b { color: var(--text); font-weight: 500; }
+  .hint { position: fixed; right: 20px; bottom: 20px; font-size: 12px; color: #b5bac3; opacity: 0.7; text-shadow: 0 1px 3px #000; }
+</style>
+</head>
+<body>
+<div class="wall"></div>
+<div class="scrim"></div>
+<div class="cap"><span>TK-421</span></div>
+
+<div class="launcher" role="dialog" aria-label="Launcher">
+  <label class="search">
+    <!-- Death Star, authored line icon: sphere, equatorial trench, superlaser dish -->
+    <svg class="prompt" viewBox="0 0 24 24" width="22" height="22"><circle cx="12" cy="12" r="8.6"/><path d="M3.4 12.6h17.2"/><circle cx="15.6" cy="8.4" r="2.2"/><path d="M15.6 8.4h.01"/></svg>
+    <input id="q" type="text" placeholder="AWAITING ORDERS" autocomplete="off" spellcheck="false" aria-controls="list">
+    <span class="tag">TK-421</span>
+  </label>
+  <div class="list" id="list" role="listbox"></div>
+</div>
+
+<div class="status" id="status"></div>
+<div class="hint">↑ ↓ navigate · ↵ open · Esc close · Space reopens</div>
+
+<script>
+  // Mock data; the real list comes from desktop entries.
+  const APPS = [
+    { n: "Visual Studio Code", g: "VS" }, { n: "Ghostty", g: "G" }, { n: "Firefox", g: "Fx" },
+    { n: "Helium Browser", g: "He" }, { n: "COSMIC Files", g: "F" }, { n: "Loupe", g: "L" },
+    { n: "Neovim", g: "Nv" }, { n: "Monkeytype", g: "Mt" }, { n: "Bloons TD 6", g: "B" },
+    { n: "Brawlhalla", g: "Bh" }, { n: "Left 4 Dead 2", g: "L4" }, { n: "Deep Rock Galactic", g: "DR" },
+    { n: "Blasphemous", g: "Bl" }, { n: "Into the Breach", g: "IB" }, { n: "Steam", g: "St" },
+    { n: "Spotify", g: "Sp" }, { n: "Discord", g: "Di" },
+  ];
+
+  const $ = (s) => document.querySelector(s);
+  const root = document.body, input = $("#q"), list = $("#list"), status = $("#status");
+  let results = [], sel = 0, statusTimer;
+
+  // Substring first, then subsequence; contiguous runs and word starts rank higher.
+  function match(name, q) {
+    if (!q) return { score: 0, idx: [] };
+    const n = name.toLowerCase(); q = q.toLowerCase();
+    const at = n.indexOf(q);
+    if (at !== -1) return { score: 1000 - at * 4 - n.length, idx: [...Array(q.length)].map((_, i) => at + i) };
+    const idx = []; let from = 0, score = 0, prev = -2;
+    for (const ch of q) {
+      const i = n.indexOf(ch, from);
+      if (i === -1) return null;
+      score += (i === prev + 1 ? 8 : 0) + (i === 0 || n[i - 1] === " " ? 6 : 0) - (i - from);
+      idx.push(i); prev = i; from = i + 1;
+    }
+    return { score: 400 + score - n.length, idx };
+  }
+
+  const esc = (s) => s.replace(/[&<>]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;" }[c]));
+  const hl = (name, idx) => { const set = new Set(idx); return [...name].map((ch, i) => set.has(i) ? `<mark>${esc(ch)}</mark>` : esc(ch)).join(""); };
+
+  function render() {
+    const q = input.value.trim();
+    results = APPS.map((a, i) => ({ a, i, m: match(a.n, q) })).filter((r) => r.m)
+      .sort((x, y) => q ? y.m.score - x.m.score : x.i - y.i);
+    sel = Math.min(sel, Math.max(results.length - 1, 0));
+    if (!results.length) { list.innerHTML = `<div class="empty">NEGATIVE<span>No program named “${esc(q)}”.</span></div>`; return; }
+    list.innerHTML = results.map((r, i) => `
+      <div class="row${i === sel ? " sel" : ""}" role="option" data-i="${i}">
+        <div class="ico">${esc(r.a.g)}</div><div class="name">${hl(r.a.n, r.m.idx)}</div><span class="idx">${String(i + 1).padStart(2, "0")}</span>
+      </div>`).join("");
+  }
+  function paintSel() {
+    list.querySelectorAll(".row").forEach((el, i) => el.classList.toggle("sel", i === sel));
+    list.querySelector(".row.sel")?.scrollIntoView({ block: "nearest" });
+  }
+  function launch(i) {
+    const r = results[i]; if (!r) return;
+    list.querySelectorAll(".row")[i]?.classList.add("go");
+    status.innerHTML = `Executing <b>${esc(r.a.n)}</b>`;
+    status.classList.add("show"); clearTimeout(statusTimer);
+    statusTimer = setTimeout(() => status.classList.remove("show"), 1600);
+    setTimeout(close, 220);
+  }
+  function open() { root.classList.add("open"); input.value = ""; sel = 0; render(); input.focus(); }
+  function close() { root.classList.remove("open"); input.blur(); }
+
+  input.addEventListener("input", () => { sel = 0; render(); list.scrollTop = 0; });
+  list.addEventListener("mousemove", (e) => { const row = e.target.closest(".row"); if (row && +row.dataset.i !== sel) { sel = +row.dataset.i; paintSel(); } });
+  list.addEventListener("click", (e) => { const row = e.target.closest(".row"); if (row) launch(+row.dataset.i); });
+  addEventListener("keydown", (e) => {
+    if (!root.classList.contains("open")) { if (e.key === " " && e.target === document.body) { e.preventDefault(); open(); } return; }
+    const n = Math.max(results.length, 1);
+    if (e.key === "Escape") close();
+    else if (e.key === "ArrowDown" || (e.ctrlKey && e.key === "n")) { e.preventDefault(); sel = (sel + 1) % n; paintSel(); }
+    else if (e.key === "ArrowUp" || (e.ctrlKey && e.key === "p")) { e.preventDefault(); sel = (sel - 1 + n) % n; paintSel(); }
+    else if (e.key === "Enter") { e.preventDefault(); launch(sel); }
+  });
+  $(".wall").addEventListener("click", () => { if (!root.classList.contains("open")) open(); });
+  $(".scrim").addEventListener("click", close);
+
+  open(); input.value = "visu"; render();
+</script>
+</body>
+</html>

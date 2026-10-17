@@ -1,0 +1,35 @@
+# TK-421 Imperial Graphite: Ghostty theme. Graphite and steel carry the whole screen; colour is only a detail.
+#   - greys (white, bright-black, magenta, cyan) are cold graphite tints, never saturated
+#   - the details: Imperial red (errors, deletions), steel blue (directories, cursor, links), and quiet sage / brass
+#     (success, warnings)
+# Derived from Theme.imperial (theme/Theme.qml, tk421/TK421.md section 24). Contrast on the background: every normal
+# colour >= 4.6:1, bright-black ~4.6:1 (fish autosuggestions). Test it in a separate session: terminal/try-palette.sh
+
+background = #0C0B0D
+foreground = #D9D7D4
+
+cursor-color = #8EA6D4
+cursor-text = #0C0B0D
+
+selection-background = #2B2F3A
+selection-foreground = #EEECE9
+
+# black, red, green, yellow, blue, magenta, cyan, white
+palette = 0=#1A1A21
+palette = 1=#C2606A
+palette = 2=#8A9C86
+palette = 3=#AA9D7C
+palette = 4=#6A86B8
+palette = 5=#8E8896
+palette = 6=#7F929D
+palette = 7=#BAB8B5
+
+# bright variants
+palette = 8=#7A797F
+palette = 9=#D4707A
+palette = 10=#A6B7A2
+palette = 11=#C6B891
+palette = 12=#8EA6D4
+palette = 13=#AAA4B3
+palette = 14=#9FB2BD
+palette = 15=#EEECE9

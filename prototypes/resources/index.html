@@ -1,0 +1,200 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>TK-421 · Resource panel</title>
+<style>
+  /* Hover panel of the CPU / RAM / GPU capsule. Same card as the dropdowns: translucent surface (alpha 0.72, Hyprland blurs it),
+     20 px radius, graphite and steel only, Orbitron for labels, Geist for numbers. One panel for the whole capsule, three blocks. */
+  :root {
+    color-scheme: dark;
+    --bg: #050505;
+    --surface: #0c0b0d;
+    --surface-alt: #1a1a21;
+    --text: #e8e6e3;
+    --muted: #8e8b88;
+    --accent: #b9b6b2;      /* brushed steel: graph lines */
+    --border: #3f3e44;
+    --danger-text: #d9808a;
+    --ease: cubic-bezier(0.22, 1, 0.36, 1);
+    --display: "Orbitron", "Geist", ui-sans-serif, sans-serif;
+    --ui: "Geist", ui-sans-serif, system-ui, sans-serif;
+  }
+  * { box-sizing: border-box; margin: 0; }
+  html, body { height: 100%; background: var(--bg); }
+  body { font-family: var(--ui); color: var(--text); overflow: hidden; -webkit-font-smoothing: antialiased; }
+  .wall { position: fixed; inset: 0; background: url("wallpaper.jpg") center / cover no-repeat; filter: brightness(0.8); }
+
+  /* the real capsule (bar/ResourceGroup): top 4, left 30, 28 px */
+  .cap {
+    position: fixed; top: 4px; left: 30px; height: 28px; padding: 0 12px; display: flex; align-items: center; gap: 12px;
+    background: var(--surface); border: 1px solid var(--border); border-radius: 14px; cursor: default;
+    font: 500 10px/28px var(--display); letter-spacing: 0.4px; color: #b5bac3;
+  }
+  .cap i { width: 1px; height: 12px; background: var(--border); }
+  .cap b { font-weight: 500; color: var(--text); margin-left: 5px; }
+  .cap .on { color: var(--text); }
+
+  /* ---------- panel ---------- */
+  .panel {
+    position: fixed; top: 40px; left: 30px; width: 720px;
+    background: rgba(12, 11, 13, 0.72); backdrop-filter: blur(6px);
+    border: 1px solid var(--border); border-radius: 20px;
+    box-shadow: 0 14px 36px -14px rgba(0, 0, 0, 0.7);
+    display: grid; grid-template-columns: repeat(3, 1fr);
+    opacity: 0; visibility: hidden; transform: translateY(-6px);
+    transition: opacity 140ms ease, transform 200ms var(--ease), visibility 0s 200ms;
+  }
+  .open .panel { opacity: 1; visibility: visible; transform: none; transition: opacity 180ms ease, transform 320ms var(--ease); }
+  .blk { padding: 16px 16px 14px; min-width: 0; }
+  .blk + .blk { border-left: 1px solid var(--border); }
+
+  .head { display: flex; align-items: baseline; justify-content: space-between; }
+  .name { font: 400 10px/1 var(--display); letter-spacing: 0.22em; }
+  .sub { font: 400 11px/1 var(--ui); color: var(--muted); }
+  .big { margin-top: 10px; font: 500 28px/1 var(--display); letter-spacing: 0.02em; }
+  .big small { font: 400 11px/1 var(--display); color: var(--muted); margin-left: 3px; }
+
+  .spark { margin-top: 10px; height: 36px; width: 100%; display: block; overflow: visible; }
+  .spark .fill { fill: rgba(185, 182, 178, 0.10); stroke: none; }
+  .spark .line { fill: none; stroke: var(--accent); stroke-width: 1.4; stroke-linejoin: round; stroke-linecap: round; vector-effect: non-scaling-stroke; }
+
+  .rows { margin-top: 12px; display: grid; gap: 7px; }
+  .row { display: flex; justify-content: space-between; align-items: baseline; font-size: 12px; }
+  .row span:first-child { font: 400 9px/1 var(--display); letter-spacing: 0.2em; color: var(--muted); text-transform: uppercase; }
+  .row span:last-child { font-variant-numeric: tabular-nums; }
+  .hot { color: var(--danger-text); }
+
+  .cores { margin-top: 12px; display: flex; gap: 3px; align-items: flex-end; height: 24px; }
+  .cores i { flex: 1; background: var(--surface-alt); border-radius: 1.5px; position: relative; height: 100%; overflow: hidden; }
+  .cores i::after { content: ""; position: absolute; left: 0; right: 0; bottom: 0; height: var(--h, 0%); background: var(--accent); opacity: 0.85; transition: height 400ms var(--ease); }
+  .bar { margin-top: 12px; height: 3px; border-radius: 2px; background: var(--surface-alt); overflow: hidden; }
+  .bar i { display: block; height: 100%; width: var(--w, 0%); background: var(--accent); opacity: 0.85; transition: width 400ms var(--ease); }
+
+  .top { margin-top: 12px; padding-top: 10px; border-top: 1px solid var(--border); display: grid; gap: 6px; }
+  .top .t { font: 400 9px/1 var(--display); letter-spacing: 0.2em; color: var(--muted); margin-bottom: 2px; }
+  .top .p { display: flex; justify-content: space-between; gap: 8px; font-size: 12px; color: var(--muted); }
+  .top .p span:first-child { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; color: var(--text); opacity: 0.9; }
+  .top .p span:last-child { font-variant-numeric: tabular-nums; flex: none; }
+
+  .hint { position: fixed; right: 20px; bottom: 20px; font-size: 12px; color: #b5bac3; opacity: 0.7; text-shadow: 0 1px 3px #000; }
+  .still .panel { transition: none !important; }
+</style>
+</head>
+<body>
+<div class="wall"></div>
+
+<div class="cap" id="cap">
+  <span>CPU<b id="cCpu">0%</b></span><i></i>
+  <span>GPU<b id="cGpu">0%</b></span><i></i>
+  <span>RAM<b id="cRam">0%</b></span>
+</div>
+
+<div class="panel" id="panel" role="dialog" aria-label="System resources">
+  <section class="blk" id="bCpu">
+    <div class="head"><span class="name">CPU</span><span class="sub">i5-10400F · 12 threads</span></div>
+    <div class="big"><span id="vCpu">0</span><small>%</small></div>
+    <svg class="spark" id="sCpu" viewBox="0 0 120 36" preserveAspectRatio="none"><path class="fill"/><path class="line"/></svg>
+    <div class="cores" id="cores"></div>
+    <div class="rows">
+      <div class="row"><span>Temp</span><span id="tCpu">—</span></div>
+      <div class="row"><span>Clock</span><span id="fCpu">—</span></div>
+    </div>
+    <div class="top" id="topCpu"><div class="t">TOP</div></div>
+  </section>
+
+  <section class="blk" id="bGpu">
+    <div class="head"><span class="name">GPU</span><span class="sub">RX 7600 · 8 GiB</span></div>
+    <div class="big"><span id="vGpu">0</span><small>%</small></div>
+    <svg class="spark" id="sGpu" viewBox="0 0 120 36" preserveAspectRatio="none"><path class="fill"/><path class="line"/></svg>
+    <div class="bar"><i id="barVram"></i></div>
+    <div class="rows">
+      <div class="row"><span>VRAM</span><span id="mGpu">—</span></div>
+      <div class="row"><span>Temp</span><span id="tGpu">—</span></div>
+      <div class="row"><span>Power</span><span id="pGpu">—</span></div>
+      <div class="row"><span>Fan</span><span id="fGpu">—</span></div>
+    </div>
+  </section>
+
+  <section class="blk" id="bRam">
+    <div class="head"><span class="name">RAM</span><span class="sub">32 GiB</span></div>
+    <div class="big"><span id="vRam">0</span><small>%</small></div>
+    <svg class="spark" id="sRam" viewBox="0 0 120 36" preserveAspectRatio="none"><path class="fill"/><path class="line"/></svg>
+    <div class="bar"><i id="barRam"></i></div>
+    <div class="rows">
+      <div class="row"><span>Used</span><span id="uRam">—</span></div>
+      <div class="row"><span>Cache</span><span id="cRamCache">—</span></div>
+      <div class="row"><span>Free</span><span id="fRam">—</span></div>
+    </div>
+    <div class="top" id="topRam"><div class="t">TOP</div></div>
+  </section>
+</div>
+
+<div class="hint">hover the capsule · the panel stays while the pointer is over it · all data is mock</div>
+
+<script>
+  const $ = (s) => document.querySelector(s);
+  const root = document.body, cap = $("#cap"), panel = $("#panel");
+  const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
+  const walk = (v, step, a = 0, b = 100) => clamp(v + (Math.random() - 0.5) * step, a, b);
+  const esc = (s) => s.replace(/[&<>]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;" }[c]));
+
+  /* ---- mock state: 60 one-second samples per metric ---- */
+  const N = 60;
+  const hist = { cpu: Array(N).fill(8), ram: Array(N).fill(26), gpu: Array(N).fill(20) };
+  let cpu = 8, ram = 26, gpu = 20, vram = 25, tCpu = 52, tGpu = 50, power = 17, cores = Array(12).fill(8);
+  $("#cores").innerHTML = cores.map(() => "<i></i>").join("");
+
+  const PROCS_CPU = [["firefox", 12], ["quickshell", 3.4], ["ghostty", 2.1]];
+  const PROCS_RAM = [["firefox", 2.1], ["code", 1.4], ["quickshell", 0.46]];
+  const fillTop = (id, list, unit, digits) => {
+    $(id).innerHTML = `<div class="t">TOP</div>` + list.map(([n, v]) =>
+      `<div class="p"><span>${esc(n)}</span><span>${v.toFixed(digits)}${unit}</span></div>`).join("");
+  };
+
+  function spark(id, series) {
+    const w = 120, h = 36, step = w / (N - 1);
+    const pts = series.map((v, i) => [i * step, h - 2 - (v / 100) * (h - 4)]);
+    const line = pts.map((p, i) => (i ? "L" : "M") + p[0].toFixed(1) + " " + p[1].toFixed(1)).join(" ");
+    const area = line + ` L${w} ${h} L0 ${h} Z`;
+    const svg = $(id); svg.querySelector(".line").setAttribute("d", line); svg.querySelector(".fill").setAttribute("d", area);
+  }
+
+  function tick() {
+    cpu = walk(cpu, 14, 2, 70); ram = walk(ram, 1.2, 15, 60); gpu = walk(gpu, 16, 2, 80); vram = walk(vram, 1, 15, 60);
+    tCpu = walk(tCpu, 3, 38, 80); tGpu = walk(tGpu, 2, 40, 80); power = walk(power, 8, 8, 120);
+    cores = cores.map((c) => walk(c, 40, 0, 100));
+    for (const [k, v] of [["cpu", cpu], ["ram", ram], ["gpu", gpu]]) { hist[k].push(v); hist[k].shift(); }
+
+    $("#cCpu").textContent = Math.round(cpu) + "%"; $("#cRam").textContent = Math.round(ram) + "%"; $("#cGpu").textContent = Math.round(gpu) + "%";
+    $("#vCpu").textContent = Math.round(cpu); $("#vRam").textContent = Math.round(ram); $("#vGpu").textContent = Math.round(gpu);
+    spark("#sCpu", hist.cpu); spark("#sRam", hist.ram); spark("#sGpu", hist.gpu);
+    document.querySelectorAll("#cores i").forEach((el, i) => el.style.setProperty("--h", cores[i] + "%"));
+
+    $("#tCpu").innerHTML = tCpu > 75 ? `<span class="hot">${tCpu.toFixed(0)}°C</span>` : tCpu.toFixed(0) + "°C";
+    $("#fCpu").textContent = (2.9 + cpu / 100 * 1.4).toFixed(2) + " GHz";
+
+    const total = 32, used = total * ram / 100, cache = 11.2;
+    $("#uRam").textContent = used.toFixed(1) + " GiB"; $("#cRamCache").textContent = cache.toFixed(1) + " GiB";
+    $("#fRam").textContent = Math.max(0, total - used - cache).toFixed(1) + " GiB"; $("#barRam").style.setProperty("--w", ram + "%");
+
+    $("#mGpu").textContent = (8 * vram / 100).toFixed(1) + " / 8 GiB"; $("#barVram").style.setProperty("--w", vram + "%");
+    $("#tGpu").textContent = tGpu.toFixed(0) + "°C"; $("#pGpu").textContent = power.toFixed(0) + " W / 145 W";
+    $("#fGpu").textContent = power > 60 ? Math.round(900 + power * 12) + " RPM" : "0 RPM";
+  }
+  fillTop("#topCpu", PROCS_CPU, "%", 1); fillTop("#topRam", PROCS_RAM, " GiB", 2);
+  for (let i = 0; i < N; i++) tick();
+  setInterval(tick, 1000);
+
+  /* ---- hover: open on the capsule, stay while the pointer is over the panel, close after a short grace ---- */
+  let closeT;
+  const openP = () => { clearTimeout(closeT); root.classList.add("open"); cap.querySelectorAll("span").forEach((s) => s.classList.add("on")); };
+  const closeP = () => { closeT = setTimeout(() => { root.classList.remove("open"); cap.querySelectorAll("span").forEach((s) => s.classList.remove("on")); }, 180); };
+  for (const el of [cap, panel]) { el.addEventListener("pointerenter", openP); el.addEventListener("pointerleave", closeP); }
+  addEventListener("keydown", (e) => { if (e.key === "Escape") { clearTimeout(closeT); root.classList.remove("open"); } });
+
+  if (location.hash === "#open") { root.classList.add("open", "still"); }
+</script>
+</body>
+</html>

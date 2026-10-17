@@ -1,0 +1,32 @@
+# TK-421 Imperial Mono-Red: Ghostty theme. The Mono greys plus one colour: Imperial red (errors, deletions, broken links). Everything else is graphite.
+# Greys carry a very slight cold tint, like Theme.imperial (theme/Theme.qml). Every normal colour is >= 4.8:1 on the
+# background, bright-black 4.55:1 (fish autosuggestions). Test it: terminal/try-palette.sh terminal/TK421-Imperial-Mono-Red
+
+background = #0C0B0D
+foreground = #E8E6E3
+
+cursor-color = #E8E6E3
+cursor-text = #0C0B0D
+
+selection-background = #2A2A30
+selection-foreground = #F4F2EF
+
+# black, red, green, yellow, blue, magenta, cyan, white
+palette = 0=#1A1A21
+palette = 1=#C2606A
+palette = 2=#918F95
+palette = 3=#A2A0A3
+palette = 4=#8A8E99
+palette = 5=#B0AEB2
+palette = 6=#C0BEBF
+palette = 7=#CFCDCA
+
+# bright variants
+palette = 8=#7A797F
+palette = 9=#D4707A
+palette = 10=#B8B6B8
+palette = 11=#C8C6C6
+palette = 12=#A5ABB8
+palette = 13=#D6D4D5
+palette = 14=#E2E0E0
+palette = 15=#F4F2EF

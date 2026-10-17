@@ -1,0 +1,453 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>TK-421 · Island, Media tab</title>
+<style>
+  /* Palette: Imperial Destroyer profile (TK421.md §24). Orbitron for the clock and labels, Geist for UI (§12).
+     Builds on prototypes/dynamic-island: only the expanded body changes (two tabs: Agenda | Media). */
+  :root {
+    color-scheme: dark;
+    --bg: #050505;
+    --surface: #0c0b0d;
+    --surface-alt: #1a1a21;
+    --text: #e8e6e3;
+    --muted: #8e8b88;
+    --accent: #506a9b;
+    --accent-dim: #29384f;
+    --border: #3f3e44;
+
+    --idle-w: 108px;   --idle-h: 28px;
+    --pill-w: 168px;
+    --open-w: min(748px, calc(100vw - 24px));  --open-h: 424px;
+    --ease: cubic-bezier(0.22, 1, 0.36, 1);
+    --dur-open: 520ms;
+    --dur-close: 340ms;
+    --dur-tab: 140ms;
+    --display: "Orbitron", "Geist", ui-sans-serif, sans-serif;
+    --ui: "Geist", ui-sans-serif, system-ui, sans-serif;
+  }
+
+  * { box-sizing: border-box; margin: 0; }
+  html, body { height: 100%; background: var(--bg); }
+  body { font-family: var(--ui); color: var(--text); overflow: hidden; -webkit-font-smoothing: antialiased; }
+  ::selection { background: var(--accent-dim); color: var(--text); }
+  button { font: inherit; }
+
+  .wall { position: fixed; inset: 0; background: url("../dynamic-island/wallpaper.jpg") center / cover no-repeat; filter: brightness(0.8); }
+
+  /* ---------- context only: the bar capsules ---------- */
+  .bar { position: fixed; inset: 0 0 auto 0; height: 30px; }
+  .cap {
+    position: absolute; top: 4px; height: 22px; padding: 0 12px;
+    display: flex; align-items: center; gap: 10px;
+    background: rgba(17, 20, 24, 0.8); border: 1px solid #39414d; border-radius: 11px;
+    font-size: 10px; font-weight: 600; color: #b5bac3; letter-spacing: 0.02em;
+  }
+  .cap.left { left: 30px; }
+  .cap i { width: 1px; height: 12px; background: #39414d; }
+
+  /* ---------- the island ---------- */
+  .island {
+    position: fixed; top: 1px; left: 50%;
+    width: var(--idle-w); height: var(--idle-h);
+    transform: translateX(-50%);
+    border-radius: calc(var(--idle-h) / 2);
+    background: var(--surface); border: 1px solid var(--border);
+    box-shadow: 0 1px 2px rgba(0, 0, 0, 0.5);
+    overflow: hidden; outline: 0;
+    transition: width var(--dur-close) var(--ease), height var(--dur-close) var(--ease),
+                border-radius var(--dur-close) var(--ease), box-shadow var(--dur-close) ease;
+  }
+  .island:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+  .playing .island { width: var(--pill-w); }
+  .open .island {
+    width: var(--open-w); height: var(--open-h); border-radius: 24px;
+    box-shadow: 0 24px 60px -12px rgba(0, 0, 0, 0.8), 0 2px 8px rgba(0, 0, 0, 0.5);
+    transition-duration: var(--dur-open);
+  }
+
+  .time {
+    position: absolute; left: 50%; top: 7px;
+    transform: translateX(-50%) scale(0.5); transform-origin: center top;
+    font-family: var(--display); font-size: 30px; line-height: 1; font-weight: 500; letter-spacing: 0.04em;
+    font-variant-numeric: tabular-nums; white-space: nowrap;
+    transition: top var(--dur-close) var(--ease), transform var(--dur-close) var(--ease);
+  }
+  .open .time { top: 22px; transform: translateX(-50%) scale(1); transition-duration: var(--dur-open); }
+  .time .s { color: var(--muted); }
+
+  .date {
+    position: absolute; left: 24px; right: 24px; top: 62px; text-align: center;
+    font-size: 14px; font-weight: 500; letter-spacing: 0.02em; color: var(--muted); white-space: nowrap;
+    opacity: 0; transform: translateY(4px); transition: opacity 160ms ease, transform 160ms ease;
+  }
+  .open .date { opacity: 1; transform: none; transition: opacity 320ms ease 160ms, transform 420ms var(--ease) 160ms; }
+
+  /* compact media activity (idle pill) */
+  .pill-art, .eq { position: absolute; top: 50%; transform: translateY(-50%); opacity: 0; transition: opacity 200ms ease; }
+  .pill-art { left: 8px; width: 18px; height: 18px; border-radius: 5px; overflow: hidden; border: 1px solid var(--border); }
+  .pill-art svg, .art svg { display: block; width: 100%; height: 100%; }
+  .eq { right: 12px; height: 12px; display: flex; align-items: flex-end; gap: 2px; }
+  .eq i { width: 2px; height: 100%; background: var(--text); transform-origin: bottom; transform: scaleY(0.3); }
+  .playing:not(.open) .pill-art, .playing:not(.open) .eq { opacity: 1; transition-delay: 160ms; }
+  .playing .eq i { animation: eq 900ms ease-in-out infinite alternate; }
+  .playing .eq i:nth-child(2) { animation-duration: 640ms; animation-delay: -200ms; }
+  .playing .eq i:nth-child(3) { animation-duration: 780ms; animation-delay: -420ms; }
+  .playing .eq i:nth-child(4) { animation-duration: 560ms; animation-delay: -100ms; }
+  @keyframes eq { from { transform: scaleY(0.25); } to { transform: scaleY(1); } }
+
+  /* ---------- tab switcher: top-left corner, level with the clock ---------- */
+  .tabs {
+    position: absolute; left: 28px; top: 26px; display: flex; gap: 18px;
+    opacity: 0; pointer-events: none; transition: opacity 140ms ease;
+  }
+  .open .tabs { opacity: 1; pointer-events: auto; transition: opacity 320ms ease 200ms; }
+  .tab {
+    position: relative; height: 28px; padding: 0; display: flex; align-items: center; gap: 7px;
+    background: transparent; border: 0; border-radius: 4px; cursor: pointer;
+    font-family: var(--display); font-size: 11px; font-weight: 500; letter-spacing: 0.18em; text-transform: uppercase;
+    color: var(--muted); transition: color var(--dur-tab) ease;
+  }
+  .tab:hover, .tab[aria-selected="true"] { color: var(--text); }
+  .tab:focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; }
+  .live {                                    /* something is playing: tells you without switching tab */
+    width: 4px; height: 4px; border-radius: 50%; background: var(--accent);
+    opacity: 0; transform: scale(0.4); transition: opacity 200ms ease, transform 300ms var(--ease);
+  }
+  .playing .live { opacity: 1; transform: none; }
+
+  /* ---------- expanded body: two panes stacked in one cell, cross-faded ---------- */
+  .body {
+    position: absolute; left: 0; right: 0; top: 100px; height: 300px; padding: 0 28px;
+    display: grid;
+    opacity: 0; filter: blur(8px); transform: scale(0.97); transform-origin: top center; pointer-events: none;
+    transition: opacity 140ms ease, filter 140ms ease, transform 140ms ease;
+  }
+  .open .body {
+    opacity: 1; filter: blur(0); transform: none; pointer-events: auto;
+    transition: opacity 320ms ease 140ms, filter 380ms ease 140ms, transform 520ms var(--ease) 140ms;
+  }
+  .pane {
+    grid-area: 1 / 1; min-width: 0;
+    opacity: 0; visibility: hidden; transition: opacity var(--dur-tab) ease, visibility 0s linear var(--dur-tab);
+  }
+  [data-tab="agenda"] .pane-agenda, [data-tab="media"] .pane-media {
+    opacity: 1; visibility: visible; transition: opacity var(--dur-tab) ease 40ms, visibility 0s;
+  }
+
+  /* agenda pane = calendar | agenda, now with the full 300px */
+  .pane-agenda { display: grid; grid-template-columns: 308px 1px 1fr; column-gap: 28px; }
+  .divider { background: var(--border); }
+
+  .cal-head { display: flex; align-items: center; height: 32px; }
+  .month { flex: 1; font-family: var(--display); font-size: 12px; font-weight: 500; letter-spacing: 0.18em; text-transform: uppercase; }
+  .nav {
+    width: 28px; height: 28px; display: grid; place-items: center;
+    background: transparent; color: var(--text); border: 1px solid transparent; border-radius: 8px; cursor: pointer;
+    transition: border-color 140ms, background-color 140ms;
+  }
+  .nav svg { width: 14px; height: 14px; stroke: currentColor; fill: none; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+  .nav:hover { background: var(--surface-alt); border-color: var(--border); }
+  .nav:focus-visible, .today-btn:focus-visible, .ctl:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+  .today-btn {
+    margin-right: 6px; height: 28px; padding: 0 10px;
+    background: transparent; color: var(--muted); border: 1px solid var(--border); border-radius: 8px; cursor: pointer;
+    font-family: var(--display); font-size: 11px; font-weight: 500; letter-spacing: 0.16em; text-transform: uppercase;
+    opacity: 0; pointer-events: none; transition: opacity 160ms, color 140ms, border-color 140ms;
+  }
+  .today-btn.show { opacity: 1; pointer-events: auto; }
+  .today-btn:hover { color: var(--text); border-color: var(--accent); }
+
+  .grid { display: grid; grid-template-columns: repeat(7, 1fr); margin-top: 6px; }
+  .dow { height: 24px; display: grid; place-items: center; font-family: var(--display); font-size: 10px; font-weight: 500; letter-spacing: 0.12em; color: var(--muted); }
+  .day {
+    height: 36px; display: grid; place-items: center; position: relative;
+    background: transparent; border: 0; color: var(--text); cursor: pointer;
+    font: 400 13px var(--ui); font-variant-numeric: tabular-nums;
+  }
+  .day span { width: 32px; height: 32px; display: grid; place-items: center; border-radius: 50%; transition: background-color 120ms; }
+  .day.out { color: var(--muted); }
+  .day:hover span { background: var(--surface-alt); }
+  .day:focus-visible { outline: 0; }
+  .day:focus-visible span { outline: 2px solid var(--accent); }
+  .day.today span { background: var(--text); color: var(--bg); font-weight: 600; }
+  .day.sel:not(.today) span { box-shadow: inset 0 0 0 1px var(--accent); }
+  .day.has::after { content: ""; position: absolute; bottom: 0; left: 50%; width: 4px; height: 4px; margin-left: -2px; border-radius: 50%; background: var(--accent); }
+
+  /* agenda column: no rule under the title any more */
+  .side { position: relative; display: flex; flex-direction: column; min-width: 0; height: 300px; }
+  .ag-head { display: flex; align-items: baseline; justify-content: space-between; height: 32px; }
+  .ag-title { font-family: var(--display); font-size: 12px; font-weight: 500; letter-spacing: 0.18em; text-transform: uppercase; }
+  .ag-count { font-size: 12px; color: var(--muted); }
+  .events { flex: 1; min-height: 0; margin-top: 4px; overflow: hidden; position: relative;
+            -webkit-mask-image: linear-gradient(#000 calc(100% - 28px), transparent); mask-image: linear-gradient(#000 calc(100% - 28px), transparent); }
+  .events.fits { -webkit-mask-image: none; mask-image: none; }
+  .ev { display: grid; grid-template-columns: 50px 1fr; align-items: center; height: 44px; }
+  .ev-time { font-size: 12px; color: var(--muted); font-variant-numeric: tabular-nums; }
+  .ev-main { min-width: 0; }
+  .ev-title { font-size: 14px; font-weight: 500; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .ev-title::before { content: ""; display: inline-block; width: 6px; height: 6px; margin-right: 8px; vertical-align: 1px; border-radius: 50%; background: var(--accent); }
+  .ev.allday .ev-title::before { background: transparent; box-shadow: inset 0 0 0 1px var(--muted); }
+  .ev-sub { margin-top: 1px; font-size: 12px; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+
+  /* shared empty state: dimmed icon + lowercase label, centred in the free space */
+  .empty {
+    position: absolute; inset: 36px 0 0 0; display: none; flex-direction: column; align-items: center; justify-content: center; gap: 10px;
+    color: var(--muted); opacity: 0.45; font-size: 13px; pointer-events: none;
+  }
+  .empty svg { width: 34px; height: 34px; stroke: currentColor; fill: none; stroke-width: 1.5; stroke-linecap: round; stroke-linejoin: round; }
+  .no-events .side .empty { display: flex; }
+  .pane-media .empty { inset: 0; }
+  .no-media .pane-media .empty { display: flex; }
+
+  /* ---------- media pane: one wide panel ---------- */
+  .pane-media { display: grid; grid-template-columns: 236px 1fr; column-gap: 36px; align-items: stretch; padding-top: 32px; }
+  .no-media .pane-media { padding-top: 0; }
+  .no-media .pane-media > :not(.empty) { display: none; }
+  .art {
+    width: 236px; height: 236px; align-self: start; border-radius: 12px; overflow: hidden; border: 1px solid var(--border);
+    transition: opacity 240ms ease, filter 240ms ease;
+  }
+  body:not(.playing) .art { opacity: 0.55; filter: saturate(0.6); }          /* paused reads as paused */
+  .m-col { display: flex; flex-direction: column; min-width: 0; height: 236px; }
+  .m-title { font-size: 22px; line-height: 1.2; font-weight: 600; letter-spacing: -0.01em; overflow: hidden; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; text-wrap: balance; }
+  .m-artist { margin-top: 6px; font-size: 14px; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .m-prog { margin-top: auto; }
+  .m-bar { height: 3px; background: var(--border); }
+  .m-bar i { display: block; height: 100%; width: 0; background: var(--accent); }
+  .m-times { margin-top: 8px; display: flex; justify-content: space-between; font-size: 12px; color: var(--muted); font-variant-numeric: tabular-nums; }
+  .m-ctl { margin-top: 18px; display: flex; align-items: center; gap: 8px; }
+  .ctl {
+    width: 40px; height: 40px; display: grid; place-items: center; cursor: pointer;
+    background: transparent; color: var(--text); border: 1px solid var(--border); border-radius: 8px;
+    transition: border-color 140ms;
+  }
+  .ctl svg { width: 16px; height: 16px; fill: currentColor; }
+  .ctl:hover { border-color: var(--accent); }
+  .ctl.main { width: 52px; height: 40px; background: var(--text); color: var(--bg); border-color: var(--text); }
+  .ctl.main .i-pause { display: none; }
+  .playing .ctl.main .i-pause { display: block; }
+  .playing .ctl.main .i-play { display: none; }
+
+  .hint { position: fixed; left: 16px; right: 16px; bottom: 14px; text-align: center; font-size: 12px; color: rgba(232, 230, 227, 0.7); }
+  .hint kbd { font: inherit; color: var(--text); }
+
+  @media (max-width: 760px) { .cap.left, .divider, .side { display: none; } .pane-agenda, .pane-media { grid-template-columns: 1fr; } .art, .m-col { display: none; } }
+  @media (prefers-reduced-motion: reduce) {
+    * { transition-duration: 1ms !important; transition-delay: 0ms !important; animation: none !important; }
+  }
+</style>
+</head>
+<body id="root" class="playing" data-tab="agenda">
+
+<div class="wall"></div>
+
+<div class="bar" aria-hidden="true">
+  <div class="cap left"><span>CPU 6%</span><i></i><span>RAM 26%</span><i></i><span>GPU 26%</span></div>
+</div>
+
+<div class="island" id="island" tabindex="0" role="button" aria-expanded="false" aria-label="Clock, calendar, agenda and media">
+  <div class="pill-art" aria-hidden="true"></div>
+  <div class="time" id="time">00:00<span class="s">:00</span></div>
+  <div class="eq" aria-hidden="true"><i></i><i></i><i></i><i></i></div>
+  <div class="date" id="date"></div>
+
+  <div class="tabs" role="tablist" aria-label="Island view" id="tabs">
+    <button class="tab" role="tab" id="tab-agenda" aria-controls="pane-agenda" aria-selected="true" data-tab="agenda" type="button">Agenda</button>
+    <button class="tab" role="tab" id="tab-media" aria-controls="pane-media" aria-selected="false" tabindex="-1" data-tab="media" type="button">Media<i class="live" aria-hidden="true"></i></button>
+  </div>
+
+  <div class="body">
+    <section class="pane pane-agenda" id="pane-agenda" role="tabpanel" aria-labelledby="tab-agenda">
+      <div>
+        <div class="cal-head">
+          <div class="month" id="month"></div>
+          <button class="today-btn" id="todayBtn" type="button">Today</button>
+          <button class="nav" id="prev" type="button" aria-label="Previous month"><svg viewBox="0 0 24 24"><path d="M15 5l-7 7 7 7"/></svg></button>
+          <button class="nav" id="next" type="button" aria-label="Next month"><svg viewBox="0 0 24 24"><path d="M9 5l7 7-7 7"/></svg></button>
+        </div>
+        <div class="grid" id="grid"></div>
+      </div>
+
+      <div class="divider" aria-hidden="true"></div>
+
+      <div class="side">
+        <div class="ag-head"><div class="ag-title" id="agTitle">Today</div><div class="ag-count" id="agCount"></div></div>
+        <div class="events" id="events"></div>
+        <div class="empty">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3.5" y="5" width="17" height="15.5" rx="2"/><path d="M3.5 10h17M8 3v4M16 3v4"/><rect x="13" y="13.5" width="4" height="3.5" rx=".5" fill="currentColor" stroke="none"/></svg>
+          <span>no events...</span>
+        </div>
+      </div>
+    </section>
+
+    <section class="pane pane-media" id="pane-media" role="tabpanel" aria-labelledby="tab-media">
+      <div class="art" id="art" aria-hidden="true"></div>
+      <div class="m-col">
+        <div class="m-title" id="mTitle">The Imperial March</div>
+        <div class="m-artist" id="mArtist">John Williams · Spotify</div>
+        <div class="m-prog">
+          <div class="m-bar"><i id="mFill"></i></div>
+          <div class="m-times"><span id="mPos">1:12</span><span id="mLen">3:06</span></div>
+        </div>
+        <div class="m-ctl">
+          <button class="ctl" id="mPrev" type="button" aria-label="Previous track"><svg viewBox="0 0 24 24"><path d="M6 5h2v14H6zM20 5v14L9.5 12z"/></svg></button>
+          <button class="ctl main" id="mPlay" type="button" aria-label="Play or pause">
+            <svg class="i-play" viewBox="0 0 24 24"><path d="M7 4.5v15L19.5 12z"/></svg>
+            <svg class="i-pause" viewBox="0 0 24 24"><path d="M6.5 5h4v14h-4zM13.5 5h4v14h-4z"/></svg>
+          </button>
+          <button class="ctl" id="mNext" type="button" aria-label="Next track"><svg viewBox="0 0 24 24"><path d="M16 5h2v14h-2zM4 5v14l10.5-7z"/></svg></button>
+        </div>
+      </div>
+      <div class="empty">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 18V6l10-2v12"/><circle cx="6.5" cy="18" r="2.5"/><circle cx="16.5" cy="16" r="2.5"/></svg>
+        <span>no media...</span>
+      </div>
+    </section>
+  </div>
+</div>
+
+<p class="hint">Prototype · hover the clock · <kbd>1</kbd> agenda · <kbd>2</kbd> media · <kbd>P</kbd> play/pause · <kbd>S</kbd> no player · <kbd>E</kbd> toggle empty agenda · closing resets to Agenda · track and events are mock data</p>
+
+<script>
+(() => {
+  const $ = id => document.getElementById(id);
+  const root = document.body, island = $('island');
+  const pad = n => String(n).padStart(2, '0');
+  const fmt = s => Math.floor(s / 60) + ':' + pad(s % 60);
+  let view = new Date(), selected = new Date(), closeTimer = null, forceEmpty = false;
+
+  /* ---- clock + date ---- */
+  function tick() {
+    const n = new Date();
+    $('time').innerHTML = `${pad(n.getHours())}:${pad(n.getMinutes())}<span class="s">:${pad(n.getSeconds())}</span>`;
+    $('date').textContent = n.toLocaleDateString('en-US', { weekday: 'long' }) + ', ' + n.getDate() + ' ' + n.toLocaleDateString('en-US', { month: 'long' });
+  }
+  tick(); setInterval(tick, 1000);
+
+  /* ---- tabs ---- */
+  function setTab(name) {
+    root.dataset.tab = name;
+    document.querySelectorAll('.tab').forEach(t => {
+      const on = t.dataset.tab === name;
+      t.setAttribute('aria-selected', on);
+      t.tabIndex = on ? 0 : -1;
+    });
+  }
+  $('tabs').addEventListener('click', e => { const t = e.target.closest('.tab'); if (t) setTab(t.dataset.tab); });
+  $('tabs').addEventListener('keydown', e => {
+    if (e.key !== 'ArrowLeft' && e.key !== 'ArrowRight') return;
+    e.preventDefault(); e.stopPropagation();
+    const next = root.dataset.tab === 'agenda' ? 'media' : 'agenda';
+    setTab(next); $('tab-' + next).focus();
+  });
+
+  /* ---- mock events (relative to today) ---- */
+  const BY_OFFSET = {
+    0: [['10:00', 'Daily', 'Google Meet · 30 min'], ['14:30', 'Dentista', 'Clínica Centro · 1 h'], ['19:00', 'Treino', 'Academia · 1 h'],
+        ['20:30', 'Jantar com a família', 'Casa · 2 h'], ['22:00', 'Revisar PR', 'GitHub · 30 min']],
+    1: [['09:00', 'Review da sprint', 'Google Meet · 1 h']],
+    3: [['13:00', 'Almoço com cliente', 'Restaurante · 1 h 30'], ['16:00', 'Planning', 'Google Meet · 2 h']],
+    4: [['11:00', 'Entrevista', 'Google Meet · 45 min']],
+    6: [['08:30', 'Voo para SP', 'Aeroporto · 2 h']],
+    9: [['15:00', 'Retro', 'Google Meet · 1 h']],
+  };
+  const startOfDay = d => new Date(d.getFullYear(), d.getMonth(), d.getDate());
+  function eventsOn(d) {
+    if (forceEmpty) return [];
+    const off = Math.round((startOfDay(d) - startOfDay(new Date())) / 864e5);
+    return (BY_OFFSET[off] || []).map(([time, title, sub]) => ({ time, title, sub }));
+  }
+
+  /* ---- calendar ---- */
+  const WEEKDAYS = ['S', 'M', 'T', 'W', 'T', 'F', 'S'];
+  function renderCal() {
+    const y = view.getFullYear(), m = view.getMonth(), today = new Date();
+    $('month').textContent = view.toLocaleDateString('en-US', { month: 'long', year: 'numeric' });
+    const first = new Date(y, m, 1), start = new Date(y, m, 1 - first.getDay());
+    let html = WEEKDAYS.map(d => `<div class="dow">${d}</div>`).join('');
+    for (let i = 0; i < 42; i++) {
+      const d = new Date(start.getFullYear(), start.getMonth(), start.getDate() + i);
+      const cls = ['day', d.getMonth() !== m && 'out', d.toDateString() === today.toDateString() && 'today',
+                   d.toDateString() === selected.toDateString() && 'sel', eventsOn(d).length && 'has'].filter(Boolean).join(' ');
+      html += `<button class="${cls}" type="button" data-t="${d.getTime()}" aria-label="${d.toDateString()}"><span>${d.getDate()}</span></button>`;
+    }
+    $('grid').innerHTML = html;
+    $('todayBtn').classList.toggle('show', y !== today.getFullYear() || m !== today.getMonth());
+  }
+
+  function renderAgenda() {
+    const isToday = selected.toDateString() === new Date().toDateString();
+    $('agTitle').textContent = isToday ? 'Today' : selected.toLocaleDateString('en-US', { weekday: 'short', day: 'numeric', month: 'short' });
+    const list = eventsOn(selected);
+    root.classList.toggle('no-events', list.length === 0);
+    $('agCount').textContent = list.length ? list.length + (list.length === 1 ? ' event' : ' events') : '';
+    $('events').classList.toggle('fits', list.length <= 6);
+    $('events').innerHTML = list.map(e => `<div class="ev"><div class="ev-time">${e.time}</div><div class="ev-main"><div class="ev-title">${e.title}</div><div class="ev-sub">${e.sub}</div></div></div>`).join('');
+  }
+
+  $('grid').addEventListener('click', e => {
+    const b = e.target.closest('.day'); if (!b) return;
+    selected = new Date(+b.dataset.t); renderCal(); renderAgenda();
+  });
+  $('prev').addEventListener('click', () => { view = new Date(view.getFullYear(), view.getMonth() - 1, 1); renderCal(); });
+  $('next').addEventListener('click', () => { view = new Date(view.getFullYear(), view.getMonth() + 1, 1); renderCal(); });
+  $('todayBtn').addEventListener('click', () => { view = new Date(); selected = new Date(); renderCal(); renderAgenda(); });
+
+  /* ---- media (mock) ---- */
+  const ART = `<svg viewBox="0 0 100 100" preserveAspectRatio="xMidYMid slice"><rect width="100" height="100" fill="#0c0b0d"/><g fill="#a14d55"><path d="M-10 70 70 -10l8 0L-10 78z" opacity=".9"/><path d="M-10 86 86 -10l6 0L-10 92z" opacity=".55"/><path d="M10 110 110 10l0 8L18 110z" opacity=".35"/></g><rect x="14" y="62" width="44" height="1.5" fill="#e8e6e3" opacity=".7"/></svg>`;
+  $('art').innerHTML = ART; document.querySelector('.pill-art').innerHTML = ART;
+  const DUR = 186; let pos = 72;
+  $('mLen').textContent = fmt(DUR);
+  function paintProgress() { $('mFill').style.width = (pos / DUR * 100) + '%'; $('mPos').textContent = fmt(pos); }
+  paintProgress();
+  setInterval(() => { if (root.classList.contains('playing')) { pos = (pos + 1) % DUR; paintProgress(); } }, 1000);
+  const setPlaying = v => root.classList.toggle('playing', v);
+  function setMedia(v) { root.classList.toggle('no-media', !v); if (!v) setPlaying(false); }
+  $('mPlay').addEventListener('click', () => setPlaying(!root.classList.contains('playing')));
+  $('mNext').addEventListener('click', () => { pos = 0; paintProgress(); });
+  $('mPrev').addEventListener('click', () => { pos = 0; paintProgress(); });
+
+  /* ---- hover / focus open-close (closing resets to the Agenda tab, like the month does) ---- */
+  function setOpen(v) {
+    root.classList.toggle('open', v);
+    island.setAttribute('aria-expanded', v);
+    if (!v) { view = new Date(); selected = new Date(); setTab('agenda'); renderCal(); renderAgenda(); }
+  }
+  island.addEventListener('pointerenter', () => { clearTimeout(closeTimer); setOpen(true); });
+  island.addEventListener('pointerleave', () => { closeTimer = setTimeout(() => setOpen(false), 180); });
+  island.addEventListener('keydown', e => {
+    if (e.target !== island) return;
+    if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setOpen(!root.classList.contains('open')); }
+    if (e.key === 'Escape') setOpen(false);
+  });
+  addEventListener('keydown', e => {
+    if (e.ctrlKey || e.metaKey || e.altKey || e.target.closest?.('.tabs')) return;
+    const k = e.key.toLowerCase();
+    if (k === '1') setTab('agenda');
+    else if (k === '2') setTab('media');
+    else if (k === 'p') { if (root.classList.contains('no-media')) setMedia(true); setPlaying(!root.classList.contains('playing')); }
+    else if (k === 's') setMedia(false);
+    else if (k === 'e') { forceEmpty = !forceEmpty; renderCal(); renderAgenda(); }
+  });
+
+  renderCal(); renderAgenda();
+
+  /* static states for screenshots: #agenda  #media  #paused  #no-media  #no-events  #idle */
+  const h = location.hash.slice(1);
+  if (h) {
+    document.documentElement.style.setProperty('--dur-open', '1ms');
+    document.documentElement.style.setProperty('--dur-close', '1ms');
+    document.documentElement.style.setProperty('--dur-tab', '1ms');
+    if (h === 'paused') setPlaying(false);
+    if (h === 'no-media') setMedia(false);
+    if (h === 'no-events') { forceEmpty = true; renderCal(); renderAgenda(); }
+    if (h !== 'idle') setOpen(true);
+    if (h === 'media' || h === 'paused' || h === 'no-media') setTab('media');
+  }
+})();
+</script>
+</body>
+</html>

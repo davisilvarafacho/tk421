@@ -1,0 +1,285 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>TK-421 · Clipboard archive</title>
+<style>
+  /* Clipboard history (SUPER+H). Same card as the approved launcher (prototypes/launcher/index.html): graphite and steel only,
+     16 px panel, translucent surface, one steel hairline. Added: a type tile per row (text, link, code, image) and a preview pane
+     under the list that shows the selected record in full. Imperial voice only in the small Orbitron labels; the clipboard content itself is never touched. */
+  :root {
+    color-scheme: dark;
+    --bg: #050505;
+    --surface: #0c0b0d;
+    --surface-alt: #1a1a21;
+    --text: #e8e6e3;
+    --muted: #8e8b88;
+    --accent: #b9b6b2;      /* brushed steel: selection rail, focus line */
+    --border: #3f3e44;
+    --danger-text: #d9808a;
+
+    --panel-w: 560px;
+    --row-h: 38px;
+    --radius: 16px;
+    --ease: cubic-bezier(0.22, 1, 0.36, 1);
+    --display: "Orbitron", "Geist", ui-sans-serif, sans-serif;
+    --ui: "Geist", ui-sans-serif, system-ui, sans-serif;
+    --mono: "Geist Mono", "JetBrains Mono", ui-monospace, monospace;
+  }
+
+  * { box-sizing: border-box; margin: 0; }
+  html, body { height: 100%; background: var(--bg); }
+  body { font-family: var(--ui); color: var(--text); overflow: hidden; -webkit-font-smoothing: antialiased; }
+  ::selection { background: #3f3e44; color: var(--text); }
+
+  .wall { position: fixed; inset: 0; background: url("wallpaper.jpg") center / cover no-repeat; filter: brightness(0.8); }
+  .scrim { position: fixed; inset: 0; background: rgba(5, 5, 5, 0.35); opacity: 0; transition: opacity 200ms ease; pointer-events: none; }
+  .open .scrim { opacity: 1; pointer-events: auto; }
+
+  .cap {
+    position: fixed; top: 4px; left: 30px; height: 28px; padding: 0 12px; display: flex; align-items: center;
+    background: var(--surface); border: 1px solid var(--border); border-radius: 14px;
+    font: 500 10px/28px var(--display); letter-spacing: 0.4px; color: #b5bac3;
+  }
+
+  /* ---------- panel ---------- */
+  .card {
+    position: fixed; left: 50%; top: 18vh; width: var(--panel-w);
+    transform: translateX(-50%) translateY(-6px);
+    background: rgba(12, 11, 13, 0.72); backdrop-filter: blur(6px);
+    border: 1px solid var(--border); border-radius: var(--radius);
+    box-shadow: 0 24px 56px -14px rgba(0, 0, 0, 0.85);
+    overflow: hidden; opacity: 0; visibility: hidden;
+    transition: opacity 120ms ease, transform 200ms var(--ease), width 320ms var(--ease), visibility 0s 200ms;
+  }
+  .card.side { width: calc(var(--panel-w) + 320px); }   /* an image preview opens beside the list, not under it */
+  .open .card { opacity: 1; visibility: visible; transform: translateX(-50%); transition: opacity 180ms ease, transform 320ms var(--ease), width 320ms var(--ease); }
+
+  .body { display: flex; }
+  .col { flex: none; width: var(--panel-w); min-width: 0; }
+
+  .search { position: relative; display: flex; align-items: center; gap: 12px; height: 52px; padding: 0 18px; }
+  .prompt { flex: none; fill: none; stroke: currentColor; stroke-width: 1.5; stroke-linecap: square; stroke-linejoin: miter; color: var(--muted); transition: color 140ms; }
+  .search:focus-within .prompt { color: var(--text); }
+  .search input {
+    flex: 1; min-width: 0; height: 100%; background: transparent; border: 0; outline: 0;
+    font: 400 16px/1 var(--ui); color: var(--text); caret-color: var(--text);
+  }
+  .search input::placeholder { font: 500 11px/1 var(--display); letter-spacing: 0.26em; color: var(--muted); opacity: 0.55; }
+  .tag { font: 500 9px/1 var(--display); letter-spacing: 0.24em; color: var(--muted); opacity: 0.6; }
+  .search::after {
+    content: ""; position: absolute; left: 0; right: 0; bottom: 0; height: 1px; background: var(--accent);
+    transform: scaleX(0); transform-origin: left; transition: transform 360ms var(--ease);
+  }
+  .search:focus-within::after { transform: scaleX(1); }
+
+  /* ---------- records ---------- */
+  .list { max-height: calc(var(--row-h) * 6 + 12px); overflow-y: auto; padding: 4px 8px 8px; scrollbar-width: none; }
+  .row {
+    position: relative; display: flex; align-items: center; gap: 14px; height: var(--row-h); padding: 0 10px; border-radius: 10px; cursor: default;
+    transition: background-color 140ms, opacity 160ms, height 200ms var(--ease);
+  }
+  .row.sel { background: var(--surface-alt); }
+  .row::before {
+    content: ""; position: absolute; left: 0; top: 11px; bottom: 11px; width: 2px; border-radius: 2px; background: var(--accent);
+    transform: scaleY(0); transition: transform 180ms var(--ease);
+  }
+  .row.sel::before { transform: scaleY(1); }
+  .row.gone { opacity: 0; height: 0; }
+  .ico {
+    width: 22px; height: 22px; border-radius: 6px; display: grid; place-items: center; flex: none; overflow: hidden;
+    background: var(--surface-alt); color: var(--muted); font: 600 9.5px/1 var(--ui);
+    transition: color 140ms, background-color 140ms;
+  }
+  .ico svg { width: 12px; height: 12px; fill: none; stroke: currentColor; stroke-width: 1.6; stroke-linecap: round; stroke-linejoin: round; }
+  .ico.img { background: url("wallpaper.jpg") center / cover; }
+  .row.sel .ico { color: var(--text); background-color: var(--bg); }
+  .row.sel .ico.img { background-color: transparent; }
+  .name { flex: 1; min-width: 0; font-size: 14px; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; transition: color 140ms; }
+  .name.code { font-family: var(--mono); font-size: 12.5px; }
+  .row.sel .name { color: var(--text); }
+  .name mark { background: none; color: var(--text); font-weight: 600; }
+  .row.sel .name mark { color: #fff; font-weight: 700; }
+  .meta { flex: none; font: 500 9px/1 var(--display); letter-spacing: 0.2em; color: var(--muted); opacity: 0.45; text-transform: uppercase; transition: opacity 140ms, color 140ms; }
+  .row.sel .meta { opacity: 0.9; color: var(--text); }
+  .row.go .ico { animation: go 360ms var(--ease); }
+  @keyframes go { 40% { transform: scale(0.85); } }
+
+  /* ---------- preview of the selected record ---------- */
+  .preview { border-top: 1px solid var(--border); margin: 0 8px; padding: 12px 10px 14px; }
+  .p-head { display: flex; justify-content: space-between; margin-bottom: 8px; font: 500 9px/1 var(--display); letter-spacing: 0.22em; color: var(--muted); text-transform: uppercase; }
+  .p-head b { font-weight: 500; color: var(--text); }
+  .p-text { height: 88px; overflow: hidden; font-size: 13px; line-height: 17.6px; color: var(--text); white-space: pre-wrap; word-break: break-word; opacity: 0.92; }
+  .p-text.code { font-family: var(--mono); font-size: 12px; }
+  .side-pane { flex: 1; min-width: 0; margin: 4px 8px 12px 0; padding: 12px 0 0 14px; border-left: 1px solid var(--border); display: none; }
+  .card.side .side-pane { display: block; }
+  .card.side .preview { display: none !important; }
+  .s-img { height: 224px; border-radius: 8px; border: 1px solid var(--border); background: url("wallpaper.jpg") center / cover; }
+  .s-meta { margin-top: 12px; display: grid; gap: 8px; font: 500 9px/1 var(--display); letter-spacing: 0.2em; text-transform: uppercase; color: var(--muted); }
+  .s-meta b { font-weight: 500; color: var(--text); margin-left: 8px; }
+
+  .empty { padding: 14px 18px 18px; font: 500 10px/1 var(--display); letter-spacing: 0.26em; color: var(--muted); }
+  .empty span { display: block; margin-top: 10px; font: 400 13px/1 var(--ui); letter-spacing: 0; opacity: 0.75; }
+
+  /* ---------- prototype-only ---------- */
+  .still .card { transition: none !important; }   /* static states (#image ...) skip the animation so a screenshot sees the final frame */
+  .status {
+    position: fixed; left: 50%; bottom: 28px; transform: translateX(-50%);
+    padding: 8px 14px; background: var(--surface); border: 1px solid var(--border); border-radius: 14px;
+    font: 500 10px/1 var(--display); letter-spacing: 0.2em; text-transform: uppercase; color: var(--muted);
+    opacity: 0; transition: opacity 200ms; pointer-events: none;
+  }
+  .status.show { opacity: 1; }
+  .status b { color: var(--text); font-weight: 500; }
+  .hint { position: fixed; right: 20px; bottom: 20px; font-size: 12px; color: #b5bac3; opacity: 0.7; text-shadow: 0 1px 3px #000; }
+</style>
+</head>
+<body>
+<div class="wall"></div>
+<div class="scrim"></div>
+<div class="cap"><span>TK-421</span></div>
+
+<div class="card" role="dialog" aria-label="Clipboard archive">
+  <label class="search">
+    <svg class="prompt" viewBox="0 0 24 24" width="22" height="22"><rect x="6" y="4.5" width="12" height="16" rx="1"/><path d="M9.5 4.5V3h5v1.5M9 10h6M9 13.5h6M9 17h3.5"/></svg>
+    <input id="q" type="text" placeholder="SEARCH THE ARCHIVE" autocomplete="off" spellcheck="false">
+    <span class="tag" id="count"></span>
+  </label>
+  <div class="body">
+    <div class="col">
+      <div class="list" id="list" role="listbox"></div>
+      <div class="preview" id="preview"></div>
+    </div>
+    <aside class="side-pane" id="side"></aside>
+  </div>
+</div>
+
+<div class="status" id="status"></div>
+<div class="hint">↑ ↓ navigate · ↵ copy back · Del purge record · Esc close · Space reopens</div>
+
+<script>
+  // Mock records, newest first. The real list comes from `cliphist list`; text is always rendered as plain text.
+  const RECORDS = [
+    { k: "text", t: "Reunião de alinhamento amanhã às 10:00, sala 3. Trazer o relatório de setembro e os números do trimestre.", n: "104 CH" },
+    { k: "link", t: "https://doc.qt.io/qt-6/qml-qtquick-listview.html#section-prop", n: "LINK" },
+    { k: "code", t: "const entries = history.filter(e => !e.dropped)\n  .map(e => e.summary)\n  .slice(0, 50)\nconsole.log(entries.length)", n: "CODE" },
+    { k: "image", t: "", n: "PNG · 1920×1080", meta: "PNG · 1920×1080 · 412 KiB" },
+    { k: "text", t: "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIPlaceholderKeyForPrototypeOnly tk421@TK-421", n: "82 CH" },
+    { k: "text", t: "pacman -Syu --noconfirm && paru -Sua", n: "CODE", code: true },
+    { k: "link", t: "https://github.com/quickshell-mirror/quickshell", n: "LINK" },
+    { k: "text", t: "Lista de compras\n- café\n- pilhas AA\n- cabo USB-C\n- papel A4", n: "5 LINES" },
+    { k: "text", t: "192.168.1.13", n: "12 CH" },
+  ];
+  const ICON = {
+    text: '<svg viewBox="0 0 24 24"><path d="M5 7h14M5 12h14M5 17h9"/></svg>',
+    link: '<svg viewBox="0 0 24 24"><path d="M10 14a4 4 0 0 0 5.7 0l3-3a4 4 0 0 0-5.7-5.7l-1 1M14 10a4 4 0 0 0-5.7 0l-3 3a4 4 0 0 0 5.7 5.7l1-1"/></svg>',
+    code: '<svg viewBox="0 0 24 24"><path d="M8 7l-5 5 5 5M16 7l5 5-5 5"/></svg>',
+    image: '',
+  };
+
+  const $ = (s) => document.querySelector(s);
+  const root = document.body, input = $("#q"), list = $("#list"), prev = $("#preview"), side = $("#side"), card = $(".card"), status = $("#status");
+  let items = RECORDS.slice(), results = [], sel = 0, statusTimer;
+
+  const flat = (r) => r.t.replace(/\s+/g, " ").trim();
+  const esc = (s) => s.replace(/[&<>]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;" }[c]));
+  const isCode = (r) => r.k === "code" || r.code;
+
+  function match(name, q) {   // same rule as launcher/Fuzzy.js: substring first, then subsequence
+    if (!q) return { score: 0, idx: [] };
+    const n = name.toLowerCase(); q = q.toLowerCase();
+    const at = n.indexOf(q);
+    if (at !== -1) return { score: 1000 - at * 4 - n.length, idx: [...Array(q.length)].map((_, i) => at + i) };
+    const idx = []; let from = 0, score = 0, prevI = -2;
+    for (const ch of q) {
+      const i = n.indexOf(ch, from);
+      if (i === -1) return null;
+      score += (i === prevI + 1 ? 8 : 0) + (i === 0 || n[i - 1] === " " ? 6 : 0) - (i - from);
+      idx.push(i); prevI = i; from = i + 1;
+    }
+    return { score: 400 + score - n.length, idx };
+  }
+  const hl = (name, idx) => { const set = new Set(idx); return [...name].map((ch, i) => set.has(i) ? `<mark>${esc(ch)}</mark>` : esc(ch)).join(""); };
+
+  function render() {
+    const q = input.value.trim();
+    results = items.map((r, i) => ({ r, i, m: r.k === "image" ? (q ? null : { score: 0, idx: [] }) : match(flat(r), q) })).filter((x) => x.m)
+      .sort((a, b) => q ? b.m.score - a.m.score : a.i - b.i);
+    sel = Math.min(sel, Math.max(results.length - 1, 0));
+    $("#count").textContent = items.length ? items.length + " RECORDS" : "";
+    if (!results.length) {
+      list.innerHTML = `<div class="empty">${q ? "NO MATCH" : "NO RECORDS"}<span>${q ? "Nothing in the archive matches “" + esc(q) + "”." : "The archive is empty."}</span></div>`;
+      prev.style.display = "none"; card.classList.remove("side"); return;
+    }
+    list.innerHTML = results.map((x, i) => `
+      <div class="row${i === sel ? " sel" : ""}" role="option" data-i="${i}">
+        <div class="ico${x.r.k === "image" ? " img" : ""}">${ICON[isCode(x.r) ? "code" : x.r.k]}</div>
+        <div class="name${isCode(x.r) ? " code" : ""}">${x.r.k === "image" ? "Image" : hl(flat(x.r), x.m.idx)}</div>
+        <span class="meta">${esc(x.r.n)}</span>
+      </div>`).join("");
+    paintPreview();
+  }
+  function paintPreview() {
+    const x = results[sel]; if (!x) return;
+    const r = x.r, no = String(sel + 1).padStart(2, "0");
+    card.classList.toggle("side", r.k === "image");
+    if (r.k === "image") {
+      side.innerHTML = `<div class="s-img"></div><div class="s-meta"><span>Record<b>${no}</b></span><span>${esc(r.meta || r.n)}</span></div>`;
+      return;
+    }
+    prev.style.display = "";
+    prev.innerHTML = `<div class="p-head"><span>Record <b>${no}</b></span><span>${esc(r.meta || r.n)}</span></div>` +
+      `<div class="p-text${isCode(r) ? " code" : ""}">${esc(r.t)}</div>`;
+  }
+  function paintSel() {
+    list.querySelectorAll(".row").forEach((el, i) => el.classList.toggle("sel", i === sel));
+    list.querySelector(".row.sel")?.scrollIntoView({ block: "nearest" });
+    paintPreview();
+  }
+  function say(html) {
+    status.innerHTML = html; status.classList.add("show"); clearTimeout(statusTimer);
+    statusTimer = setTimeout(() => status.classList.remove("show"), 1600);
+  }
+  function copyBack(i) {
+    const x = results[i]; if (!x) return;
+    list.querySelectorAll(".row")[i]?.classList.add("go");
+    say(`Archive <b>copied</b> · ${x.r.k === "image" ? "image" : "text"} back on the clipboard`);
+    setTimeout(close, 220);
+  }
+  function purge(i) {
+    const x = results[i]; if (!x) return;
+    const row = list.querySelectorAll(".row")[i]; row?.classList.add("gone");
+    items = items.filter((r) => r !== x.r);
+    say(`Record <b>purged</b>`);
+    setTimeout(() => { render(); }, 200);
+  }
+  function open() { root.classList.add("open"); input.value = ""; sel = 0; render(); input.focus(); }
+  function close() { root.classList.remove("open"); input.blur(); }
+
+  input.addEventListener("input", () => { sel = 0; render(); list.scrollTop = 0; });
+  list.addEventListener("mousemove", (e) => { const row = e.target.closest(".row"); if (row && +row.dataset.i !== sel) { sel = +row.dataset.i; paintSel(); } });
+  list.addEventListener("click", (e) => { const row = e.target.closest(".row"); if (row) copyBack(+row.dataset.i); });
+  addEventListener("keydown", (e) => {
+    if (!root.classList.contains("open")) { if (e.key === " " && e.target === document.body) { e.preventDefault(); open(); } return; }
+    const n = Math.max(results.length, 1);
+    if (e.key === "Escape") close();
+    else if (e.key === "ArrowDown" || (e.ctrlKey && e.key === "n")) { e.preventDefault(); sel = (sel + 1) % n; paintSel(); }
+    else if (e.key === "ArrowUp" || (e.ctrlKey && e.key === "p")) { e.preventDefault(); sel = (sel - 1 + n) % n; paintSel(); }
+    else if (e.key === "Enter") { e.preventDefault(); copyBack(sel); }
+    else if (e.key === "Delete") { e.preventDefault(); purge(sel); }
+  });
+  $(".wall").addEventListener("click", () => { if (!root.classList.contains("open")) open(); });
+  $(".scrim").addEventListener("click", close);
+
+  /* static states for screenshots: #default #image #code #search #empty */
+  open();
+  const h = location.hash.slice(1);
+  if (h) root.classList.add("still");
+  if (h === "image") { sel = 3; render(); }
+  else if (h === "code") { sel = 2; render(); }
+  else if (h === "search") { input.value = "git"; render(); }
+  else if (h === "empty") { items = []; render(); }
+</script>
+</body>
+</html>

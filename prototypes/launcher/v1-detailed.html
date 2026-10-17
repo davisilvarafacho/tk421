@@ -1,0 +1,287 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>TK-421 · Launcher</title>
+<style>
+  /* Palette: Imperial Destroyer profile (TK421.md §24). Orbitron for labels, Geist for UI (§12).
+     Replaces the stock Hyprlauncher look (teal outline, rounded pill rows, full-width green selection).
+     Same ingredients as the island/notification prototypes: surface + 1 px graphite border, one cold accent,
+     no blur, no glow. Only addition to the palette: --accent-text, a lighter tint of --accent for match
+     highlights, because #506a9b alone is too dim on #0c0b0d at 14 px. */
+  :root {
+    color-scheme: dark;
+    --bg: #050505;
+    --surface: #0c0b0d;
+    --surface-alt: #1a1a21;
+    --text: #e8e6e3;
+    --muted: #8e8b88;
+    --accent: #506a9b;
+    --accent-dim: #29384f;
+    --accent-text: #93abdb;
+    --danger: #a14d55;
+    --border: #3f3e44;
+
+    --panel-w: 600px;
+    --row-h: 44px;
+    --rows-max: 7;
+    --ease: cubic-bezier(0.22, 1, 0.36, 1);
+    --display: "Orbitron", "Geist", ui-sans-serif, sans-serif;
+    --ui: "Geist", ui-sans-serif, system-ui, sans-serif;
+  }
+
+  * { box-sizing: border-box; margin: 0; }
+  html, body { height: 100%; background: var(--bg); }
+  body { font-family: var(--ui); color: var(--text); overflow: hidden; -webkit-font-smoothing: antialiased; }
+  ::selection { background: var(--accent-dim); color: var(--text); }
+  svg { display: block; fill: none; stroke: currentColor; stroke-width: 1.7; stroke-linecap: round; stroke-linejoin: round; }
+
+  .wall { position: fixed; inset: 0; background: url("wallpaper.jpg") center / cover no-repeat; filter: brightness(0.8); }
+  .scrim { position: fixed; inset: 0; background: rgba(5, 5, 5, 0.45); opacity: 0; transition: opacity 200ms ease; pointer-events: none; }
+  .open .scrim { opacity: 1; pointer-events: auto; }
+
+  /* ---------- context only: the real bar capsule ---------- */
+  .cap {
+    position: fixed; top: 4px; left: 30px; height: 28px; padding: 0 12px;
+    display: flex; align-items: center; gap: 10px;
+    background: var(--surface); border: 1px solid var(--border); border-radius: 14px;
+    font: 500 10px/28px var(--display); letter-spacing: 0.4px; color: #b5bac3;
+  }
+
+  /* ---------- panel ---------- */
+  .launcher {
+    position: fixed; left: 50%; top: 22vh;
+    width: var(--panel-w);
+    transform: translateX(-50%) translateY(-6px);
+    background: var(--surface); border: 1px solid var(--border); border-radius: 6px;
+    box-shadow: 0 28px 64px -14px rgba(0, 0, 0, 0.85), 0 2px 8px rgba(0, 0, 0, 0.5);
+    overflow: hidden;
+    opacity: 0; visibility: hidden;
+    transition: opacity 120ms ease, transform 200ms var(--ease), visibility 0s 200ms;
+  }
+  .open .launcher { opacity: 1; visibility: visible; transform: translateX(-50%); transition: opacity 180ms ease, transform 320ms var(--ease); }
+
+  /* header strip: tiny Orbitron label, like a console title */
+  .head {
+    display: flex; align-items: center; justify-content: space-between;
+    height: 24px; padding: 0 14px;
+    border-bottom: 1px solid var(--border);
+    font: 500 9px/1 var(--display); letter-spacing: 0.22em; text-transform: uppercase; color: var(--muted);
+  }
+  .head b { font-weight: 500; color: var(--accent-text); }
+
+  .search { position: relative; display: flex; align-items: center; gap: 12px; height: 54px; padding: 0 14px; }
+  .search svg { width: 17px; height: 17px; color: var(--muted); flex: none; transition: color 140ms; }
+  .search:focus-within svg { color: var(--accent-text); }
+  .search input {
+    flex: 1; min-width: 0; height: 100%;
+    background: transparent; border: 0; outline: 0;
+    font: 400 17px/1 var(--ui); color: var(--text); caret-color: var(--accent-text);
+  }
+  .search input::placeholder { color: var(--muted); opacity: 0.7; }
+  .count { font: 500 10px/1 var(--display); letter-spacing: 0.4px; color: var(--muted); font-variant-numeric: tabular-nums; }
+  /* focus line: one accent hairline that grows from the left under the input, replaces the old teal outline */
+  .search::after {
+    content: ""; position: absolute; left: 0; bottom: -1px; height: 1px; width: 100%;
+    background: var(--accent); transform: scaleX(0); transform-origin: left;
+    transition: transform 360ms var(--ease);
+  }
+  .search:focus-within::after { transform: scaleX(1); }
+
+  /* ---------- results ---------- */
+  .list {
+    position: relative; border-top: 1px solid var(--border);
+    max-height: calc(var(--row-h) * var(--rows-max) + 8px); overflow-y: auto; padding: 4px 0;
+    scrollbar-width: thin; scrollbar-color: var(--border) transparent;
+  }
+  .row {
+    position: relative; display: grid; grid-template-columns: 28px 1fr auto; align-items: center; column-gap: 14px;
+    height: var(--row-h); padding: 0 14px; cursor: default;
+  }
+  .row::before {   /* selection rail, 2 px accent, instead of a filled rounded bar */
+    content: ""; position: absolute; left: 0; top: 6px; bottom: 6px; width: 2px;
+    background: var(--accent); transform: scaleY(0); transition: transform 180ms var(--ease);
+  }
+  .row.sel { background: var(--surface-alt); }
+  .row.sel::before { transform: scaleY(1); }
+
+  .ico {
+    width: 28px; height: 28px; border-radius: 4px; display: grid; place-items: center;
+    font: 700 12px/1 var(--ui); color: #fff; letter-spacing: 0;
+  }
+  .ico svg { width: 16px; height: 16px; stroke-width: 1.8; }
+  .name { font-size: 14.5px; line-height: 1.2; color: #c9c7c4; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .row.sel .name { color: var(--text); }
+  .name mark { background: none; color: var(--accent-text); font-weight: 600; }
+  .meta { display: flex; align-items: center; gap: 10px; }
+  .kind { font: 500 9px/1 var(--display); letter-spacing: 0.2em; text-transform: uppercase; color: var(--muted); }
+  .enter { width: 14px; height: 14px; color: var(--muted); opacity: 0; transition: opacity 120ms; }
+  .row.sel .enter { opacity: 1; }
+  .row.go .ico { animation: go 360ms var(--ease); }
+  @keyframes go { 40% { transform: scale(0.88); } }
+
+  .empty { padding: 34px 14px; text-align: center; }
+  .empty b { display: block; font: 500 11px/1 var(--display); letter-spacing: 0.24em; color: var(--muted); }
+  .empty span { display: block; margin-top: 10px; font-size: 13px; color: var(--muted); opacity: 0.75; }
+
+  /* ---------- footer: key hints ---------- */
+  .foot {
+    display: flex; align-items: center; gap: 18px; height: 32px; padding: 0 14px;
+    border-top: 1px solid var(--border); font-size: 11.5px; color: var(--muted);
+  }
+  .foot span { display: inline-flex; align-items: center; gap: 7px; }
+  .foot .push { margin-left: auto; }
+  kbd {
+    display: inline-grid; place-items: center; min-width: 18px; height: 17px; padding: 0 5px;
+    font: 500 10px/1 var(--ui); color: #b5bac3; border: 1px solid var(--border); border-radius: 3px; background: var(--bg);
+  }
+
+  /* ---------- prototype-only chrome ---------- */
+  .status {
+    position: fixed; left: 50%; bottom: 28px; transform: translateX(-50%);
+    padding: 8px 14px; background: var(--surface); border: 1px solid var(--border); border-radius: 4px;
+    font: 500 10px/1 var(--display); letter-spacing: 0.2em; text-transform: uppercase; color: var(--muted);
+    opacity: 0; transition: opacity 200ms; pointer-events: none;
+  }
+  .status.show { opacity: 1; }
+  .status b { color: var(--accent-text); font-weight: 500; }
+  .hint { position: fixed; right: 20px; bottom: 20px; font-size: 12px; color: #b5bac3; opacity: 0.8; text-shadow: 0 1px 3px #000; }
+  .hint kbd { background: var(--surface); }
+</style>
+</head>
+<body>
+<div class="wall"></div>
+<div class="scrim"></div>
+<div class="cap"><span>TK-421</span></div>
+
+<div class="launcher" role="dialog" aria-label="Launcher">
+  <div class="head"><span>Launch</span><b>TK-421</b></div>
+  <label class="search">
+    <svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.6-3.6"/></svg>
+    <input id="q" type="text" placeholder="Search applications" autocomplete="off" spellcheck="false" aria-controls="list">
+    <span class="count" id="count"></span>
+  </label>
+  <div class="list" id="list" role="listbox"></div>
+  <div class="foot">
+    <span><kbd>↑</kbd><kbd>↓</kbd> Navigate</span>
+    <span><kbd>↵</kbd> Open</span>
+    <span><kbd>Esc</kbd> Close</span>
+    <span class="push"><kbd>Ctrl</kbd><kbd>1–9</kbd> Jump</span>
+  </div>
+</div>
+
+<div class="status" id="status"></div>
+<div class="hint">Click the wallpaper or press <kbd>Space</kbd> to reopen</div>
+
+<script>
+  // Mock data. Real icons come from the desktop entries; here a monogram on the brand colour stands in.
+  const APPS = [
+    { n: "Visual Studio Code", k: "App",  c: "#1f6fc2", g: "VS" },
+    { n: "Ghostty",            k: "App",  c: "#3b4a63", g: "G"  },
+    { n: "Firefox",            k: "App",  c: "#c4561f", g: "Fx" },
+    { n: "Helium Browser",     k: "App",  c: "#3a7f87", g: "He" },
+    { n: "COSMIC Files",       k: "App",  c: "#4d5fa8", g: "F"  },
+    { n: "Loupe",              k: "App",  c: "#6b5aa8", g: "L"  },
+    { n: "Neovim",             k: "App",  c: "#3d7a45", g: "Nv" },
+    { n: "Monkeytype",         k: "Web",  c: "#c9a227", g: "Mt", dark: true },
+    { n: "Bloons TD 6",        k: "Game", c: "#a04a2a", g: "B"  },
+    { n: "Brawlhalla",         k: "Game", c: "#2f6f8f", g: "Bh" },
+    { n: "Left 4 Dead 2",      k: "Game", c: "#8a2f2f", g: "L4" },
+    { n: "Deep Rock Galactic", k: "Game", c: "#a8741f", g: "DR" },
+    { n: "Blasphemous",        k: "Game", c: "#6e2330", g: "Bl" },
+    { n: "Into the Breach",    k: "Game", c: "#2f6b57", g: "IB" },
+    { n: "Steam",              k: "App",  c: "#1b2838", g: "St" },
+    { n: "Spotify",            k: "App",  c: "#1c8a45", g: "Sp" },
+    { n: "Discord",            k: "App",  c: "#5865f2", g: "Di" },
+  ];
+
+  const $ = (s) => document.querySelector(s);
+  const root = document.body, input = $("#q"), list = $("#list"), count = $("#count"), status = $("#status");
+  let results = [], sel = 0, statusTimer;
+
+  // Subsequence match with a score: contiguous runs and word starts rank higher; shorter names win ties.
+  function match(name, q) {
+    if (!q) return { score: 0, idx: [] };
+    const n = name.toLowerCase(); q = q.toLowerCase();
+    const at = n.indexOf(q);
+    if (at !== -1) return { score: 1000 - at * 4 - n.length, idx: [...Array(q.length)].map((_, i) => at + i) };
+    const idx = []; let from = 0, score = 0, prev = -2;
+    for (const ch of q) {
+      const i = n.indexOf(ch, from);
+      if (i === -1) return null;
+      score += (i === prev + 1 ? 8 : 0) + (i === 0 || n[i - 1] === " " ? 6 : 0) - (i - from);
+      idx.push(i); prev = i; from = i + 1;
+    }
+    return { score: 400 + score - n.length, idx };
+  }
+
+  const esc = (s) => s.replace(/[&<>]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;" }[c]));
+  function hl(name, idx) {
+    if (!idx.length) return esc(name);
+    const set = new Set(idx);
+    return [...name].map((ch, i) => set.has(i) ? `<mark>${esc(ch)}</mark>` : esc(ch)).join("");
+  }
+
+  function render() {
+    const q = input.value.trim();
+    results = APPS.map((a, i) => ({ a, i, m: match(a.n, q) })).filter((r) => r.m)
+      .sort((x, y) => q ? y.m.score - x.m.score : x.i - y.i);
+    sel = Math.min(sel, Math.max(results.length - 1, 0));
+    count.textContent = q ? String(results.length).padStart(2, "0") : "";
+
+    if (!results.length) {
+      list.innerHTML = `<div class="empty"><b>NO MATCH</b><span>Nothing called “${esc(q)}” is installed.</span></div>`;
+      return;
+    }
+    list.innerHTML = results.map((r, i) => `
+      <div class="row${i === sel ? " sel" : ""}" role="option" data-i="${i}">
+        <div class="ico" style="background:${r.a.c};${r.a.dark ? "color:#111" : ""}">${esc(r.a.g)}</div>
+        <div class="name">${hl(r.a.n, r.m.idx)}</div>
+        <div class="meta"><span class="kind">${r.a.k}</span>
+          <svg class="enter" viewBox="0 0 24 24"><path d="M20 5v7a3 3 0 0 1-3 3H5"/><path d="m9 11-4 4 4 4"/></svg></div>
+      </div>`).join("");
+  }
+
+  function paintSel() {
+    list.querySelectorAll(".row").forEach((el, i) => el.classList.toggle("sel", i === sel));
+    list.querySelector(".row.sel")?.scrollIntoView({ block: "nearest" });
+  }
+
+  function launch(i) {
+    const r = results[i]; if (!r) return;
+    list.querySelectorAll(".row")[i]?.classList.add("go");
+    status.innerHTML = `Launching <b>${esc(r.a.n)}</b>`;
+    status.classList.add("show"); clearTimeout(statusTimer);
+    statusTimer = setTimeout(() => status.classList.remove("show"), 1600);
+    setTimeout(close, 220);
+  }
+
+  function open() { root.classList.add("open"); input.value = ""; sel = 0; render(); input.focus(); }
+  function close() { root.classList.remove("open"); input.blur(); }
+
+  input.addEventListener("input", () => { sel = 0; render(); list.scrollTop = 0; });
+  list.addEventListener("mousemove", (e) => {
+    const row = e.target.closest(".row"); if (row && +row.dataset.i !== sel) { sel = +row.dataset.i; paintSel(); }
+  });
+  list.addEventListener("click", (e) => { const row = e.target.closest(".row"); if (row) launch(+row.dataset.i); });
+
+  addEventListener("keydown", (e) => {
+    if (!root.classList.contains("open")) {
+      if (e.key === " " && e.target === document.body) { e.preventDefault(); open(); }
+      return;
+    }
+    if (e.key === "Escape") { close(); }
+    else if (e.key === "ArrowDown" || (e.ctrlKey && e.key === "n")) { e.preventDefault(); sel = (sel + 1) % Math.max(results.length, 1); paintSel(); }
+    else if (e.key === "ArrowUp" || (e.ctrlKey && e.key === "p")) { e.preventDefault(); sel = (sel - 1 + results.length) % Math.max(results.length, 1); paintSel(); }
+    else if (e.key === "Enter") { e.preventDefault(); launch(sel); }
+    else if (e.ctrlKey && /^[1-9]$/.test(e.key)) { e.preventDefault(); launch(+e.key - 1); }
+  });
+  $(".wall").addEventListener("click", () => { if (!root.classList.contains("open")) open(); });
+  $(".scrim").addEventListener("click", close);
+
+  open();
+  input.value = "visu"; render();
+</script>
+</body>
+</html>

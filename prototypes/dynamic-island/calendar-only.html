@@ -1,0 +1,256 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>TK-421 · Dynamic Island</title>
+<style>
+  /* Palette: Imperial Destroyer profile (TK421.md §24). Orbitron for labels, Geist for UI (§12). */
+  :root {
+    color-scheme: dark;
+    --bg: #050505;
+    --surface: #0c0b0d;
+    --surface-alt: #1a1a21;
+    --text: #e8e6e3;
+    --muted: #8e8b88;
+    --accent: #506a9b;
+    --accent-dim: #29384f;
+    --border: #3f3e44;
+
+    --idle-w: 108px;  --idle-h: 28px;
+    --open-w: 340px;  --open-h: 398px;
+    --display: "Orbitron", "Geist", ui-sans-serif, sans-serif;
+    --ui: "Geist", ui-sans-serif, system-ui, sans-serif;
+    --spring: cubic-bezier(0.22, 1, 0.36, 1);   /* ease-out, no overshoot */
+    --dur-open: 520ms;
+    --dur-close: 340ms;
+  }
+
+  * { box-sizing: border-box; margin: 0; }
+  html, body { height: 100%; background: var(--bg); }
+  body {
+    font-family: var(--ui); color: var(--text); overflow: hidden;
+    -webkit-font-smoothing: antialiased;
+  }
+  ::selection { background: var(--accent-dim); color: var(--text); }
+
+  .wall { position: fixed; inset: 0; background: url("wallpaper.jpg") center / cover no-repeat; filter: brightness(0.8); }
+
+  /* ---------- mock of the existing bar (context only) ---------- */
+  .bar { position: fixed; inset: 0 0 auto 0; height: 30px; }
+  .cap {
+    position: absolute; top: 4px; height: 22px; padding: 0 12px;
+    display: flex; align-items: center; gap: 10px;
+    background: rgba(17, 20, 24, 0.8); border: 1px solid #39414d; border-radius: 11px;
+    font-size: 10px; font-weight: 600; color: #b5bac3; letter-spacing: 0.02em;
+  }
+  .cap.left { left: 30px; }
+  .cap.right { right: 14px; gap: 12px; }
+  .cap i { width: 1px; height: 12px; background: #39414d; }
+  .cap svg { width: 14px; height: 14px; stroke: #b5bac3; fill: none; stroke-width: 1.6; stroke-linecap: round; stroke-linejoin: round; }
+
+  /* ---------- the island ---------- */
+  .island {
+    position: fixed; top: 1px; left: 50%;
+    width: var(--idle-w); height: var(--idle-h);
+    transform: translateX(-50%);
+    border-radius: calc(var(--idle-h) / 2);
+    background: var(--surface);
+    border: 1px solid var(--border);
+    box-shadow: 0 1px 2px rgba(0, 0, 0, 0.5);
+    overflow: hidden; cursor: default; outline: 0;
+    transition:
+      width var(--dur-close) var(--spring),
+      height var(--dur-close) var(--spring),
+      border-radius var(--dur-close) var(--spring),
+      box-shadow var(--dur-close) ease;
+  }
+  .island:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+  .open .island {
+    width: var(--open-w); height: var(--open-h); border-radius: 24px;
+    box-shadow: 0 24px 60px -12px rgba(0, 0, 0, 0.8), 0 2px 8px rgba(0, 0, 0, 0.5);
+    transition-duration: var(--dur-open), var(--dur-open), var(--dur-open), var(--dur-open);
+  }
+
+  /* shared element: the time stays centred and only changes size/height */
+  .time {
+    position: absolute; left: 50%; top: 7px;
+    transform: translateX(-50%) scale(0.5);
+    transform-origin: center top;
+    font-family: var(--display);
+    font-size: 30px; line-height: 1; font-weight: 500; letter-spacing: 0.04em;
+    font-variant-numeric: tabular-nums; white-space: nowrap;
+    transition: top var(--dur-close) var(--spring), transform var(--dur-close) var(--spring);
+  }
+  .open .time {
+    top: 22px; transform: translateX(-50%) scale(1);
+    transition-duration: var(--dur-open);
+  }
+  .time .s { color: var(--muted); }
+
+  .date {
+    position: absolute; left: 24px; right: 24px; top: 62px; text-align: center;
+    font-family: var(--ui); font-size: 14px; font-weight: 500; letter-spacing: 0.02em;
+    color: var(--muted); white-space: nowrap;
+    opacity: 0; transform: translateY(4px);
+    transition: opacity 160ms ease, transform 160ms ease;
+  }
+  .open .date { opacity: 1; transform: none; transition: opacity 320ms ease 160ms, transform 420ms var(--spring) 160ms; }
+
+  /* ---------- calendar ---------- */
+  .cal {
+    position: absolute; left: 0; right: 0; top: 96px; padding: 0 24px;
+    opacity: 0; filter: blur(8px); transform: scale(0.96); transform-origin: top center;
+    pointer-events: none;
+    transition: opacity 140ms ease, filter 140ms ease, transform 140ms ease;
+  }
+  .open .cal {
+    opacity: 1; filter: blur(0); transform: none; pointer-events: auto;
+    transition: opacity 320ms ease 140ms, filter 380ms ease 140ms, transform 520ms var(--spring) 140ms;
+  }
+
+  .cal-head { display: flex; align-items: center; height: 32px; }
+  .month {
+    flex: 1; font-family: var(--display); font-size: 12px; font-weight: 500;
+    letter-spacing: 0.18em; text-transform: uppercase;
+  }
+  .nav {
+    width: 28px; height: 28px; display: grid; place-items: center;
+    background: transparent; color: var(--text); border: 1px solid transparent; border-radius: 8px; cursor: pointer;
+    transition: border-color 140ms, background-color 140ms;
+  }
+  .nav svg { width: 14px; height: 14px; stroke: currentColor; fill: none; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+  .nav:hover { background: var(--surface-alt); border-color: var(--border); }
+  .nav:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+  .today-btn {
+    margin-right: 6px; height: 28px; padding: 0 10px;
+    background: transparent; color: var(--muted); border: 1px solid var(--border); border-radius: 8px; cursor: pointer;
+    font-family: var(--display); font-size: 11px; font-weight: 500; letter-spacing: 0.16em; text-transform: uppercase;
+    opacity: 0; pointer-events: none; transition: opacity 160ms, color 140ms, border-color 140ms;
+  }
+  .today-btn.show { opacity: 1; pointer-events: auto; }
+  .today-btn:hover { color: var(--text); border-color: var(--accent); }
+  .today-btn:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+
+  .grid { display: grid; grid-template-columns: repeat(7, 1fr); margin-top: 6px; }
+  .dow {
+    height: 24px; display: grid; place-items: center;
+    font-family: var(--display); font-size: 10px; font-weight: 500; letter-spacing: 0.12em; color: var(--muted);
+  }
+  .day {
+    height: 36px; display: grid; place-items: center; position: relative;
+    background: transparent; border: 0; color: var(--text); cursor: pointer;
+    font: 400 13px var(--ui); font-variant-numeric: tabular-nums;
+  }
+  .day span { width: 32px; height: 32px; display: grid; place-items: center; border-radius: 50%; transition: background-color 120ms; }
+  .day.out { color: var(--muted); }
+  .day:hover span { background: var(--surface-alt); }
+  .day:focus-visible { outline: 0; }
+  .day:focus-visible span { outline: 2px solid var(--accent); outline-offset: 0; }
+  .day.today span { background: var(--text); color: var(--bg); font-weight: 600; }
+  .day.sel:not(.today) span { box-shadow: inset 0 0 0 1px var(--accent); }
+
+  .hint {
+    position: fixed; left: 16px; right: 16px; bottom: 14px; text-align: center;
+    font-size: 12px; color: rgba(232, 230, 227, 0.7);
+  }
+
+  @media (max-width: 760px) { .cap.left, .cap.right { display: none; } }
+  @media (prefers-reduced-motion: reduce) {
+    * { transition-duration: 1ms !important; transition-delay: 0ms !important; }
+  }
+</style>
+</head>
+<body id="root">
+
+<div class="wall"></div>
+
+<div class="bar" aria-hidden="true">
+  <div class="cap left"><span>CPU 6%</span><i></i><span>RAM 26%</span><i></i><span>GPU 26%</span></div>
+  <div class="cap right">
+    <svg viewBox="0 0 24 24"><path d="M2 9a15 15 0 0 1 20 0M5.5 12.5a10 10 0 0 1 13 0M9 16a5 5 0 0 1 6 0"/><circle cx="12" cy="19.5" r=".6"/></svg>
+    <svg viewBox="0 0 24 24"><path d="M7 7l10 10-5 4V3l5 4L7 17"/></svg>
+    <svg viewBox="0 0 24 24"><path d="M4 9.5v5h4l5 4v-13l-5 4zM16.5 9a4 4 0 0 1 0 6"/></svg>
+    <svg viewBox="0 0 24 24"><path d="M6 17V11a6 6 0 0 1 12 0v6l1.5 2h-15zM10 21h4"/></svg>
+    <svg viewBox="0 0 24 24"><path d="M12 3v8M6.3 6.8a8 8 0 1 0 11.4 0"/></svg>
+  </div>
+</div>
+
+<div class="island" id="island" tabindex="0" role="button" aria-expanded="false" aria-label="Clock and calendar">
+  <div class="time" id="time">00:00<span class="s">:00</span></div>
+  <div class="date" id="date"></div>
+
+  <div class="cal" id="cal">
+    <div class="cal-head">
+      <div class="month" id="month"></div>
+      <button class="today-btn" id="todayBtn" type="button">Today</button>
+      <button class="nav" id="prev" type="button" aria-label="Previous month"><svg viewBox="0 0 24 24"><path d="M15 5l-7 7 7 7"/></svg></button>
+      <button class="nav" id="next" type="button" aria-label="Next month"><svg viewBox="0 0 24 24"><path d="M9 5l7 7-7 7"/></svg></button>
+    </div>
+    <div class="grid" id="grid"></div>
+  </div>
+</div>
+
+<p class="hint">Prototype · hover the clock · or press <kbd>Tab</kbd> then <kbd>Enter</kbd></p>
+
+<script>
+(() => {
+  const $ = id => document.getElementById(id);
+  const root = document.body, island = $('island');
+  const WEEKDAYS = ['S', 'M', 'T', 'W', 'T', 'F', 'S'];          // Sunday-first (Brazil)
+  let view = new Date(), selected = null, closeTimer = null;
+
+  /* ---- time + date ---- */
+  const pad = n => String(n).padStart(2, '0');
+  function tick() {
+    const n = new Date();
+    $('time').innerHTML = `${pad(n.getHours())}:${pad(n.getMinutes())}<span class="s">:${pad(n.getSeconds())}</span>`;
+    $('date').textContent = n.toLocaleDateString('en-US', { weekday: 'long' }) + ', ' + n.getDate() + ' ' + n.toLocaleDateString('en-US', { month: 'long' });
+  }
+  tick(); setInterval(tick, 1000);
+
+  /* ---- calendar ---- */
+  function render() {
+    const y = view.getFullYear(), m = view.getMonth(), today = new Date();
+    $('month').textContent = view.toLocaleDateString('en-US', { month: 'long', year: 'numeric' });
+    const first = new Date(y, m, 1), start = new Date(y, m, 1 - first.getDay());   // back to Sunday
+    let html = WEEKDAYS.map(d => `<div class="dow">${d}</div>`).join('');
+    for (let i = 0; i < 42; i++) {
+      const d = new Date(start.getFullYear(), start.getMonth(), start.getDate() + i);
+      const out = d.getMonth() !== m, isToday = d.toDateString() === today.toDateString();
+      const isSel = selected && d.toDateString() === selected.toDateString();
+      html += `<button class="day${out ? ' out' : ''}${isToday ? ' today' : ''}${isSel ? ' sel' : ''}" type="button" data-t="${d.getTime()}" aria-label="${d.toDateString()}"><span>${d.getDate()}</span></button>`;
+    }
+    $('grid').innerHTML = html;
+    $('todayBtn').classList.toggle('show', y !== today.getFullYear() || m !== today.getMonth());
+  }
+  $('grid').addEventListener('click', e => {
+    const b = e.target.closest('.day'); if (!b) return;
+    selected = new Date(+b.dataset.t); render();
+  });
+  $('prev').addEventListener('click', () => { view = new Date(view.getFullYear(), view.getMonth() - 1, 1); render(); });
+  $('next').addEventListener('click', () => { view = new Date(view.getFullYear(), view.getMonth() + 1, 1); render(); });
+  $('todayBtn').addEventListener('click', () => { view = new Date(); render(); });
+  render();
+
+  /* ---- hover / focus open-close (short leave delay so the pointer can cross the edge) ---- */
+  function setOpen(v) {
+    root.classList.toggle('open', v);
+    island.setAttribute('aria-expanded', v);
+    if (!v) { view = new Date(); render(); }               // collapse resets to the current month
+  }
+  island.addEventListener('pointerenter', () => { clearTimeout(closeTimer); setOpen(true); });
+  island.addEventListener('pointerleave', () => { closeTimer = setTimeout(() => setOpen(false), 180); });
+  island.addEventListener('keydown', e => {
+    if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setOpen(!root.classList.contains('open')); }
+    if (e.key === 'Escape') setOpen(false);
+  });
+
+  if (location.hash === '#open') {                         // static state for screenshots
+    document.documentElement.style.setProperty('--dur-open', '1ms');
+    setOpen(true);
+  }
+})();
+</script>
+</body>
+</html>
