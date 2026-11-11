@@ -23,6 +23,8 @@ QtObject {
     readonly property QtObject imperial: QtObject {
         readonly property color bg: "#050505"
         readonly property color surface: "#0C0B0D"
+        readonly property color ink: "#000000"      // the island and every bar pill: pure black, opaque
+        readonly property color hairline: Qt.rgba(1, 1, 1, 0.09)   // their 1 px edge (the grey border haloed on bright wallpapers)
         readonly property color surfaceAlt: "#1A1A21"
         readonly property color text: "#E8E6E3"
         readonly property color muted: "#8E8B88"

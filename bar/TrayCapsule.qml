@@ -1,30 +1,25 @@
 import Quickshell
 import QtQuick
 
+import "../components"
 import "../services"
 import "../theme"
 
 // Capsule with the icons of the apps that keep one in the bar, left of the toolbar capsule. Hidden when there are none.
-// More than three active apps, and every passive one, sit behind the chevron (dropdown "tray").
-Rectangle {
+// Every app is shown (services/Tray.qml); the chevron and its "tray" dropdown only appear if overflowItems is ever non-empty.
+BarPill {
     id: tray
 
     readonly property var c: Theme.imperial
 
     visible: Tray.any
-    implicitWidth: row.implicitWidth + 12
-    implicitHeight: 28
-    radius: 14
-
-    color: c.surface
-    border.width: 1
-    border.color: c.border
+    implicitWidth: row.implicitWidth + 22     // the icon cells add ~5 px, so the glyphs sit ~16 px in, like the left text
 
     Row {
         id: row
 
         anchors.centerIn: parent
-        spacing: 2
+        spacing: 4
 
         Repeater {
             model: ScriptModel {
@@ -69,7 +64,7 @@ Rectangle {
                 radius: 5
                 color: tray.c.accent
                 border.width: 2
-                border.color: tray.c.surface
+                border.color: tray.c.ink       // ring cut out of the pill's black
             }
 
             MouseArea {

@@ -12,8 +12,6 @@ import "../bar/trayLogic.js" as Logic
 Singleton {
     id: root
 
-    readonly property int maxVisible: 3
-
     // [{ id, item, passive, attention }], in the order the apps registered.
     readonly property var entries: {
         const out = []
@@ -30,10 +28,12 @@ Singleton {
         return out
     }
 
-    readonly property var parts: Logic.partition(entries, maxVisible)
-    readonly property var visibleItems: parts.visible.map(e => e.item)
-    readonly property var overflowItems: parts.overflow.map(e => e.item)
-    readonly property bool overflowAttention: parts.overflowAttention
+    // Every app is shown in the capsule, passive ones included (the user wants them all in sight). The chevron and the
+    // "tray" overflow dropdown stay wired but only appear while overflowItems is non-empty, which is now never;
+    // Logic.partition(entries, max) brings the old split back.
+    readonly property var visibleItems: entries.map(e => e.item)
+    readonly property var overflowItems: []
+    readonly property bool overflowAttention: false
     readonly property bool any: entries.length > 0
 
     function nameOf(item) {

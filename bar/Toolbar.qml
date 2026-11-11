@@ -1,27 +1,26 @@
 import QtQuick
 
-import "../theme"
+import "../components"
 
 // Right-hand capsule of the bar, the mirror of the CPU/RAM/GPU capsule. Items are added to the Row:
 // notifications now; network, Bluetooth and power get their own specs.
-Rectangle {
+BarPill {
     id: toolbar
 
-    implicitWidth: row.implicitWidth + 10
-    implicitHeight: 28
-    radius: 14
-
-    color: Theme.imperial.surface
-    border.width: 1
-    border.color: Theme.imperial.border
+    // Same pill as the tray. The usage chip pads its spark 8 px inside its hover cell (icon cells pad ~5), so the left
+    // side gets 8 px instead of 11: every pill keeps ~16 px between its edge and the first and last glyph.
+    implicitWidth: 8 + row.implicitWidth + 11
 
     Row {
         id: row
 
-        anchors.centerIn: parent
-        spacing: 2
+        anchors.left: parent.left
+        anchors.leftMargin: 8
+        anchors.verticalCenter: parent.verticalCenter
+        spacing: 4
 
         UsageChip {}
+        KeyboardButton {}
         NetworkButton {}
         BluetoothButton {}
         VolumeButton {}

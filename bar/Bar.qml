@@ -16,8 +16,8 @@ PanelWindow {
         right: true
     }
 
-    implicitHeight: 32
-    exclusiveZone: 32
+    implicitHeight: 38
+    exclusiveZone: 38
     color: "transparent"
 
     SystemStats {
@@ -25,7 +25,7 @@ PanelWindow {
     }
 
     // Cápsula de monitoramento
-    Rectangle {
+    BarPill {
         id: resourcesCapsule
 
         anchors {
@@ -35,13 +35,7 @@ PanelWindow {
             topMargin: 4     // same top edge and height as the Dynamic Island pill
         }
 
-        implicitWidth: resourcesRow.implicitWidth + 24
-        implicitHeight: 28
-        radius: 14
-
-        color: Theme.imperial.surface
-        border.width: 1
-        border.color: Theme.imperial.border
+        implicitWidth: resourcesRow.implicitWidth + 32
 
         // Hovering the capsule opens the resource panel (resources/ResourcePanel.qml).
         HoverHandler {
@@ -52,7 +46,7 @@ PanelWindow {
             id: resourcesRow
 
             anchors.centerIn: parent
-            spacing: 10
+            spacing: 12
 
             ResourceIndicator {
                 label: "CPU"
@@ -86,7 +80,7 @@ PanelWindow {
     }
 
     // Cápsula de áreas de trabalho
-    Rectangle {
+    BarPill {
         id: workspacesCapsule
 
         anchors {
@@ -96,13 +90,7 @@ PanelWindow {
             topMargin: 4     // same top edge and height as the resources capsule
         }
 
-        implicitWidth: workspaceIndicator.implicitWidth + 24
-        implicitHeight: 28
-        radius: 14
-
-        color: Theme.imperial.surface
-        border.width: 1
-        border.color: Theme.imperial.border
+        implicitWidth: workspaceIndicator.implicitWidth + 32
 
         WorkspaceIndicator {
             id: workspaceIndicator
@@ -114,7 +102,7 @@ PanelWindow {
     // O relógio agora vive na Dynamic Island (island/Island.qml).
     
 
-    // Toolbar capsule (right). Notifications first; network, Bluetooth and power join it later.
+    // Toolbar capsule (right), the mirror of the resources pill: 30 px from the wall, like the dropdowns under it.
     Toolbar {
         id: toolbarCapsule
 
@@ -122,7 +110,7 @@ PanelWindow {
             right: parent.right
             top: parent.top
             rightMargin: 30
-            topMargin: 4     // same top edge and height as the left capsules
+            topMargin: 4
         }
     }
 
@@ -131,8 +119,8 @@ PanelWindow {
         anchors {
             right: toolbarCapsule.left
             top: parent.top
-            rightMargin: 8
-            topMargin: 4     // same top edge and height as the other capsules
+            rightMargin: 8      // the gap between the left capsules
+            topMargin: 4        // same top edge and height as the left capsules
         }
     }
 
