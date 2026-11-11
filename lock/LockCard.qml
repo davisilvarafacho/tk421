@@ -1,6 +1,7 @@
 import QtQuick
 import QtQuick.Layouts
 
+import "../components"
 import "../services"
 import "../theme"
 
@@ -82,12 +83,11 @@ Rectangle {
 
         Behavior on opacity { NumberAnimation { duration: card.closing ? 170 : 250 } }
 
-        Text {
+        Icon {
             anchors.centerIn: parent
-            text: card.padlockOpen ? "󰌿" : "󰌾"
+            name: card.padlockOpen ? "lock_open" : "lock"
             color: card.c.text
-            font.family: Theme.iconFont
-            font.pixelSize: 28
+            size: Theme.iconSize.hero
         }
 
         Rectangle {

@@ -150,13 +150,11 @@ PanelWindow {
 
                         Behavior on color { ColorAnimation { duration: 140 } }
 
-                        Text {
+                        Icon {
                             anchors.centerIn: parent
-                            text: ""
+                            name: "notifications_paused"
                             color: Notifications.dnd || dndArea.containsMouse ? win.c.text : win.c.muted
-                            renderType: Text.CurveRendering
-                            font.family: Theme.iconFont
-                            font.pixelSize: 13
+                            size: Theme.iconSize.panel
                         }
 
                         MouseArea {
@@ -269,13 +267,11 @@ PanelWindow {
                 spacing: 8
                 visible: list.count === 0
 
-                Text {
+                Icon {
                     anchors.horizontalCenter: parent.horizontalCenter
-                    text: "󰂛"
+                    name: "notifications_paused"
                     color: win.c.muted
-                    renderType: Text.CurveRendering
-                    font.family: Theme.iconFont
-                    font.pixelSize: 24
+                    size: Theme.iconSize.hero
                 }
 
                 Text {

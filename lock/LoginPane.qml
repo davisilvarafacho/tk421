@@ -2,6 +2,7 @@ import QtQuick
 import QtQuick.Layouts
 import Quickshell
 
+import "../components"
 import "../theme"
 
 ColumnLayout {
@@ -97,14 +98,13 @@ ColumnLayout {
             NumberAnimation { target: shift; property: "x"; to: 0; duration: 60 }
         }
 
-        Text {
+        Icon {
             anchors.left: parent.left
             anchors.leftMargin: 14
             anchors.verticalCenter: parent.verticalCenter
-            text: "󰌾"
+            name: "lock"
             color: root.c.muted
-            font.family: Theme.iconFont
-            font.pixelSize: 17
+            size: Theme.iconSize.panel
         }
 
         Text {
@@ -154,12 +154,11 @@ ColumnLayout {
             color: goArea.containsMouse ? "#FFFFFF" : root.c.text
             visible: field.text.length > 0
 
-            Text {
+            Icon {
                 anchors.centerIn: parent
-                text: root.session.status === "verifying" ? "󰑓" : "󰁔"
+                name: root.session.status === "verifying" ? "refresh" : "arrow_forward"
                 color: root.c.bg
-                font.family: Theme.iconFont
-                font.pixelSize: 18
+                size: Theme.iconSize.panel
             }
 
             MouseArea {

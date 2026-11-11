@@ -64,22 +64,22 @@ function primaryIndex(devices) {
     return -1
 }
 
-// Font Awesome / Material Design glyphs from the Symbols Nerd Font for a BlueZ device class (the "icon" property).
+// Icon name (theme/icons.js) for a BlueZ device class (the "icon" property).
 function btGlyph(iconName) {
     var n = String(iconName || "").toLowerCase()
     if (n.indexOf("headphone") >= 0 || n.indexOf("headset") >= 0)
-        return ""
+        return "headphones"
     if (n.indexOf("keyboard") >= 0)
-        return ""
+        return "keyboard"
     if (n.indexOf("mouse") >= 0)
-        return "󰍽"
+        return "mouse"
     if (n.indexOf("phone") >= 0)
-        return ""
+        return "smartphone"
     if (n.indexOf("speaker") >= 0 || n.indexOf("audio") >= 0)
-        return ""
+        return "speaker"
     if (n.indexOf("gaming") >= 0 || n.indexOf("joystick") >= 0)
-        return ""
-    return ""
+        return "sports_esports"
+    return "bluetooth"
 }
 
 // d: { state: "connecting"|"disconnecting"|..., pairing, paired, connected, battery (percent or -1) }

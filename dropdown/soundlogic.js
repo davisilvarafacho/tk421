@@ -23,20 +23,14 @@ function percentText(v, muted) {
     return muted ? "mute" : Math.round(clamp01(v) * 100) + "%"
 }
 
-// Material Design volume glyphs from the Symbols Nerd Font: off, low, medium, high.
+// Icon names (theme/icons.js). The level is carried by the percentage text, so the icon only tells sound from silence.
 function speakerGlyph(vol, muted) {
-    if (muted || !(vol > 0))
-        return "󰖁"
-    if (vol < 0.34)
-        return "󰕿"
-    if (vol < 0.67)
-        return "󰖀"
-    return "󰕾"
+    return (muted || !(vol > 0)) ? "volume_off" : "volume_up"
 }
 
-// Font Awesome microphone / microphone-slash. "Not recognised" uses the plain glyph, dimmed by the item.
+// "Not recognised" uses the plain icon, dimmed by the item.
 function micGlyph(state) {
-    return state === "muted" ? "" : ""
+    return state === "muted" ? "mic_muted" : "mic"
 }
 
 function clean(text, max) {

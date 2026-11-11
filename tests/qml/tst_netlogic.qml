@@ -2,6 +2,7 @@ import QtQuick
 import QtTest
 
 import "../../dropdown/netlogic.js" as Net
+import "../../theme/icons.js" as Icons
 
 TestCase {
     name: "NetLogic"
@@ -101,16 +102,16 @@ TestCase {
 
     // ---- btGlyph ----
     function test_btGlyph() {
-        compare(Net.btGlyph("audio-headphones"), "")
-        compare(Net.btGlyph("audio-headset"), "")
-        compare(Net.btGlyph("input-keyboard"), "")
-        compare(Net.btGlyph("input-mouse"), "󰍽")
-        compare(Net.btGlyph("phone"), "")
-        compare(Net.btGlyph("audio-card"), "")
-        compare(Net.btGlyph("input-gaming"), "")
-        compare(Net.btGlyph("something-else"), "")
-        compare(Net.btGlyph(""), "")
-        compare(Net.btGlyph(undefined), "")
+        compare(Net.btGlyph("audio-headphones"), "headphones")
+        compare(Net.btGlyph("audio-headset"), "headphones")
+        compare(Net.btGlyph("input-keyboard"), "keyboard")
+        compare(Net.btGlyph("input-mouse"), "mouse")
+        compare(Net.btGlyph("phone"), "smartphone")
+        compare(Net.btGlyph("audio-card"), "speaker")
+        compare(Net.btGlyph("input-gaming"), "sports_esports")
+        compare(Net.btGlyph("something-else"), "bluetooth")
+        compare(Net.btGlyph(""), "bluetooth")
+        compare(Net.btGlyph(undefined), "bluetooth")
     }
 
     // ---- btSub ----
@@ -158,5 +159,12 @@ TestCase {
         compare(Net.countConnected([{ connected: true }, {}, { connected: true }]), 2)
         compare(Net.countConnected([]), 0)
         compare(Net.countConnected(undefined), 0)
+    }
+
+    function test_allNamesKnown() {
+        const inputs = ["audio-headphones", "audio-headset", "input-keyboard", "input-mouse", "phone", "audio-card",
+            "audio-speakers", "input-gaming", "input-joystick", "something-else", "", undefined, null]
+        for (const i of inputs)
+            verify(Icons.resolve(Net.btGlyph(i)) !== null, "unknown icon name for " + i)
     }
 }

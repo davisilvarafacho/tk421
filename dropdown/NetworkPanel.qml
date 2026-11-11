@@ -96,14 +96,12 @@ Item {
                 width: column.width
                 height: 62
 
-                Text {
+                Icon {
                     x: 16
                     anchors.verticalCenter: parent.verticalCenter
-                    text: Net.mode === "eth" ? "󰈀" : Net.mode === "wifi" ? "󰖩" : Net.hasWifi ? "󰖪" : "󰈁"
+                    name: Net.mode === "eth" ? "lan" : Net.mode === "wifi" ? "wifi" : Net.hasWifi ? "wifi_off" : "lan"
                     color: Net.connected ? panel.c.text : panel.c.muted
-                    renderType: Text.CurveRendering
-                    font.family: Theme.iconFont
-                    font.pixelSize: 26
+                    size: Theme.iconSize.hero
                 }
 
                 Column {
@@ -260,15 +258,13 @@ Item {
                             }
                         }
 
-                        Text {
+                        Icon {
                             visible: wifiRow.modelData.secure
                             x: parent.width - 16 - implicitWidth
                             anchors.verticalCenter: parent.verticalCenter
-                            text: ""
+                            name: "lock"
                             color: panel.c.muted
-                            renderType: Text.CurveRendering
-                            font.family: Theme.iconFont
-                            font.pixelSize: 11
+                            size: Theme.iconSize.panel
                         }
 
                         Text {

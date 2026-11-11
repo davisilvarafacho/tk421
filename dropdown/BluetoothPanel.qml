@@ -119,16 +119,12 @@ Item {
             }
         }
 
-        Text {
-            x: 16
-            width: 20
-            horizontalAlignment: Text.AlignHCenter
+        Icon {
+            x: 16 + (20 - width) / 2      // centred in the 20 px cell the text columns are laid out against
             anchors.verticalCenter: parent.verticalCenter
-            text: row.modelData.glyph
+            name: row.modelData.glyph
+            size: Theme.iconSize.panel
             color: area.containsMouse ? panel.c.text : panel.c.muted
-            renderType: Text.CurveRendering
-            font.family: Theme.iconFont
-            font.pixelSize: 16
         }
 
         Column {
@@ -222,13 +218,11 @@ Item {
                 bottomPadding: 22
                 spacing: 6
 
-                Text {
+                Icon {
                     anchors.horizontalCenter: parent.horizontalCenter
-                    text: ""
+                    name: "bluetooth"
                     color: panel.c.muted
-                    renderType: Text.CurveRendering
-                    font.family: Theme.iconFont
-                    font.pixelSize: 24
+                    size: Theme.iconSize.hero
                 }
 
                 Text {

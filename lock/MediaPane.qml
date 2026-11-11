@@ -1,6 +1,7 @@
 import QtQuick
 import QtQuick.Layouts
 
+import "../components"
 import "../services"
 import "../theme"
 
@@ -30,12 +31,11 @@ ColumnLayout {
         border.color: primary ? root.c.text : (area.containsMouse ? root.c.accent : root.c.border)
         opacity: enabledControl ? 1 : 0.4
 
-        Text {
+        Icon {
             anchors.centerIn: parent
-            text: btn.glyph
+            name: btn.glyph
             color: btn.primary ? root.c.bg : root.c.text
-            font.family: Theme.iconFont
-            font.pixelSize: 18
+            size: 18
         }
 
         MouseArea {
@@ -73,13 +73,12 @@ ColumnLayout {
             visible: status === Image.Ready
         }
 
-        Text {
+        Icon {
             anchors.centerIn: parent
             visible: art.status !== Image.Ready
-            text: "󰎆"
+            name: "music_note"
             color: root.c.border
-            font.family: Theme.iconFont
-            font.pixelSize: 72
+            size: 72
         }
     }
 
@@ -171,9 +170,9 @@ ColumnLayout {
         Layout.topMargin: 16
         spacing: 8
 
-        Btn { glyph: "󰒮"; onClicked: Media.previous() }
-        Btn { glyph: Media.playing ? "󰏤" : "󰐊"; primary: true; onClicked: Media.toggle() }
-        Btn { glyph: "󰒭"; onClicked: Media.next() }
+        Btn { glyph: "skip_previous"; onClicked: Media.previous() }
+        Btn { glyph: Media.playing ? "pause" : "play_arrow"; primary: true; onClicked: Media.toggle() }
+        Btn { glyph: "skip_next"; onClicked: Media.next() }
     }
 
     Item { Layout.fillHeight: true }

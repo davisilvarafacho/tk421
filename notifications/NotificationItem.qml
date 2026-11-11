@@ -162,13 +162,11 @@ Item {
 
                     Behavior on opacity { NumberAnimation { duration: 140 } }
 
-                    Text {
+                    Icon {
                         anchors.centerIn: parent
-                        text: "󰅖"
+                        name: "close"
                         color: xArea.containsMouse ? item.c.text : item.c.muted
-                        renderType: Text.CurveRendering
-                        font.family: Theme.iconFont
-                        font.pixelSize: 13
+                        size: Theme.iconSize.panel
                     }
 
                     MouseArea {

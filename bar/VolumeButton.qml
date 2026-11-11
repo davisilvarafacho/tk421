@@ -1,5 +1,6 @@
 import QtQuick
 
+import "../components"
 import "../services"
 import "../theme"
 
@@ -39,13 +40,11 @@ Item {
                 }
             }
 
-            Text {
+            Icon {
                 anchors.centerIn: parent
-                text: Sound.outGlyph
+                name: Sound.outGlyph
+                size: Theme.iconSize.bar
                 color: muteArea.containsMouse ? item.c.text : item.dim ? "#6D727B" : "#B5BAC3"
-                renderType: Text.CurveRendering
-                font.family: Theme.iconFont
-                font.pixelSize: 15
 
                 Behavior on color {
                     ColorAnimation { duration: 140 }

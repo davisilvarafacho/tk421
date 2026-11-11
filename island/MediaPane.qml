@@ -79,35 +79,32 @@ Item {
             Image {
                 id: artImage
                 anchors.fill: parent
-                anchors.margins: 1
                 source: Media.art
                 fillMode: Image.PreserveAspectCrop
                 asynchronous: true
                 visible: status === Image.Ready
             }
 
-            Text {
-                renderType: Text.CurveRendering
+            Icon {
                 anchors.centerIn: parent
                 visible: artImage.status !== Image.Ready
-                text: "󰎆"
-                color: root.c.border
-                font.family: Theme.iconFont
-                font.pixelSize: 64
+                name: "music_note"
+                size: 72
+                color: "#3A393F"
             }
         }
 
         Item {
             id: info
 
-            x: art.width + 36
+            x: art.width + 40
             y: art.y
             width: parent.width - x
             height: art.height
 
             Column {
                 width: parent.width
-                spacing: 6
+                spacing: 8
 
                 Text {
                     renderType: Text.CurveRendering

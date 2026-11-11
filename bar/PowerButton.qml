@@ -1,5 +1,6 @@
 import QtQuick
 
+import "../components"
 import "../services"
 import "../theme"
 
@@ -24,13 +25,11 @@ Item {
         }
     }
 
-    Text {
+    Icon {
         anchors.centerIn: parent
-        text: ""      // Font Awesome power-off
+        name: "power_settings_new"
+        size: Theme.iconSize.bar
         color: button.lit ? button.c.text : "#B5BAC3"
-        renderType: Text.CurveRendering
-        font.family: Theme.iconFont
-        font.pixelSize: 14
 
         Behavior on color {
             ColorAnimation { duration: 140 }

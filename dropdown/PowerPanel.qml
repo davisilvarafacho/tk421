@@ -95,14 +95,12 @@ Item {
                     onClicked: row.modelData.confirm ? Power.ask(row.modelData.id) : Power.run(row.modelData.id)
                 }
 
-                Text {
+                Icon {
                     x: 16
                     y: row.yOff + (40 - height) / 2
-                    text: row.modelData.glyph
+                    name: row.modelData.glyph
+                    size: Theme.iconSize.panel
                     color: row.asking ? panel.c.dangerText : area.containsMouse ? panel.c.text : panel.c.muted
-                    renderType: Text.CurveRendering
-                    font.family: Theme.iconFont
-                    font.pixelSize: 15
 
                     Behavior on color {
                         ColorAnimation { duration: 140 }

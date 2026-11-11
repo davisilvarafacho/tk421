@@ -3,6 +3,7 @@ import Quickshell.Io
 import Quickshell.Wayland
 import QtQuick
 
+import "../components"
 import "../services"
 import "../theme"
 import "logic.js" as Logic
@@ -336,17 +337,15 @@ PanelWindow {
                     renderType: Text.CurveRendering
                 }
 
-                Text {
+                Icon {
                     id: refreshGlyph
 
                     anchors.right: refreshLabel.left
                     anchors.rightMargin: 6
                     anchors.verticalCenter: refreshLabel.verticalCenter
-                    text: "\uf021"
+                    name: "refresh"
                     color: refreshArea.containsMouse ? win.c.text : win.c.muted
-                    font.family: Theme.iconFont
-                    font.pixelSize: 11
-                    renderType: Text.CurveRendering
+                    size: Theme.iconSize.panel
 
                     RotationAnimator on rotation {
                         from: 0

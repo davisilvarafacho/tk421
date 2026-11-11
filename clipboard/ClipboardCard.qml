@@ -3,6 +3,7 @@ import Quickshell.Io
 import Quickshell.Wayland
 import QtQuick
 
+import "../components"
 import "../launcher/Fuzzy.js" as Fuzzy
 import "../services"
 import "../theme"
@@ -97,10 +98,10 @@ PanelWindow {
         hide()
         if (paste) {
             Quickshell.execDetached(["lua", Quickshell.shellPath("clipboard/paste.lua"), String(r.id)])
-            Hud.show("ARCHIVE", "pasted", "", "")
+            Hud.show("ARCHIVE", "pasted", "content_paste", "")
         } else {
             Quickshell.execDetached(["sh", "-c", 'cliphist decode "$1" | wl-copy', "_", String(r.id)])
-            Hud.show("ARCHIVE", "copied", "", "")
+            Hud.show("ARCHIVE", "copied", "content_copy", "")
         }
     }
 
@@ -113,7 +114,7 @@ PanelWindow {
             "_", String(r.id), Quickshell.env("XDG_RUNTIME_DIR") + "/tk421-clipboard"])
         records = records.filter(x => x.id !== r.id)
         refresh()
-        Hud.show("ARCHIVE", "purged", "", "")
+        Hud.show("ARCHIVE", "purged", "delete", "")
     }
 
     onSelectedChanged: previewTimer.restart()
@@ -228,18 +229,15 @@ PanelWindow {
             width: parent.width
             height: 52
 
-            Text {
+            Icon {
                 id: mark
 
                 x: 18
                 anchors.verticalCenter: parent.verticalCenter
                 width: 22
-                horizontalAlignment: Text.AlignHCenter
-                text: ""
+                name: "content_paste"
                 color: input.activeFocus ? win.c.text : win.c.muted
-                renderType: Text.CurveRendering
-                font.family: Theme.iconFont
-                font.pixelSize: 17
+                size: Theme.iconSize.panel
 
                 Behavior on color { ColorAnimation { duration: 140 } }
             }
@@ -396,14 +394,12 @@ PanelWindow {
 
                     Behavior on color { ColorAnimation { duration: 140 } }
 
-                    Text {
+                    Icon {
                         anchors.centerIn: parent
                         visible: row.kind !== "image"
-                        text: row.kind === "link" ? "" : row.kind === "code" ? "" : ""
+                        name: row.kind === "link" ? "link" : row.kind === "code" ? "code" : "description"
                         color: row.sel ? win.c.text : win.c.muted
-                        renderType: Text.CurveRendering
-                        font.family: Theme.iconFont
-                        font.pixelSize: 11
+                        size: Theme.iconSize.panel
                     }
 
                     Loader {

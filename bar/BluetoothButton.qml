@@ -1,5 +1,6 @@
 import QtQuick
 
+import "../components"
 import "../services"
 import "../theme"
 
@@ -30,16 +31,14 @@ Item {
         }
     }
 
-    Text {
+    Icon {
         id: glyph
 
         x: 5
         anchors.verticalCenter: parent.verticalCenter
-        text: ""      // Font Awesome bluetooth
+        name: "bluetooth"
+        size: Theme.iconSize.bar
         color: button.lit ? button.c.text : Bt.powered ? "#B5BAC3" : "#6D727B"
-        renderType: Text.CurveRendering
-        font.family: Theme.iconFont
-        font.pixelSize: 14
 
         Behavior on color {
             ColorAnimation { duration: 140 }

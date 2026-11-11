@@ -1,6 +1,7 @@
 import Quickshell
 import QtQuick
 
+import "../components"
 import "../services"
 import "../theme"
 import "soundlogic.js" as Logic
@@ -107,13 +108,12 @@ Item {
             border.width: 1
             border.color: vr.muted ? panel.c.danger : (muteArea.containsMouse ? panel.c.muted : panel.c.border)
 
-            Text {
+            Icon {
                 anchors.centerIn: parent
-                text: vr.glyph
+                name: vr.glyph
+                size: Theme.iconSize.panel
                 color: vr.muted ? panel.c.dangerText : (muteArea.containsMouse ? panel.c.text : panel.c.muted)
-                renderType: Text.CurveRendering
-                font.family: Theme.iconFont
-                font.pixelSize: 14
+                gapColor: panel.c.surface
             }
 
             MouseArea {
@@ -222,13 +222,11 @@ Item {
             border.width: 1
             border.color: dr.modelData.current ? panel.c.accent : (area.containsMouse ? panel.c.muted : panel.c.border)
 
-            Text {
+            Icon {
                 anchors.centerIn: parent
-                text: dr.modelData.glyph
+                name: dr.modelData.glyph
+                size: Theme.iconSize.panel
                 color: dr.modelData.current || area.containsMouse ? panel.c.text : panel.c.muted
-                renderType: Text.CurveRendering
-                font.family: Theme.iconFont
-                font.pixelSize: 15
             }
         }
 

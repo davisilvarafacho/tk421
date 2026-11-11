@@ -232,7 +232,7 @@ Singleton {
 
     function setDnd(on) {
         dnd = on
-        Hud.show("COMMS", on ? "silenced" : "open", on ? "󰂛" : "󰂚", "")
+        Hud.show("COMMS", on ? "silenced" : "open", on ? "notifications_paused" : "notifications", "")
         if (on && toast && !toast.critical)
             hideToast(false)
     }

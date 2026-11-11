@@ -4,7 +4,7 @@ import Quickshell
 import QtQuick
 
 // A brief pill in the island: a confirmation of something the user just did (a power action, opening a tray app).
-// Shows `glyph` (a Nerd Font character) or `image` (a URL), then `label` and `state`.
+// Shows `glyph` (an icon name from theme/icons.js) or `image` (a URL), then `label` and `state`.
 Singleton {
     id: root
 

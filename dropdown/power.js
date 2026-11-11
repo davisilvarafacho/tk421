@@ -3,14 +3,14 @@
 // Power actions of the bar menu and the commands they run. Pure: nothing here executes anything.
 // Tested by tests/qml/tst_power.qml.
 //
-// Glyphs are Font Awesome codepoints from the Symbols Nerd Font.
+// `glyph` is a name from the icon table (theme/icons.js), drawn by components/Icon.qml.
 
 var ACTIONS = [
-    { id: "lock",     label: "Lock",      hint: "Super L", glyph: "", confirm: false, hud: "Locking",      gap: false },
-    { id: "suspend",  label: "Suspend",   hint: "",        glyph: "", confirm: false, hud: "Suspending",   gap: false },
-    { id: "logout",   label: "Log out",   hint: "",        glyph: "", confirm: true,  hud: "Logging out",  gap: true },
-    { id: "reboot",   label: "Restart",   hint: "",        glyph: "", confirm: true,  hud: "Restarting",   gap: false },
-    { id: "poweroff", label: "Power off", hint: "",        glyph: "", confirm: true,  hud: "Powering off", gap: false }
+    { id: "lock",     label: "Lock",      hint: "Super L", glyph: "lock", confirm: false, hud: "Locking",      gap: false },
+    { id: "suspend",  label: "Suspend",   hint: "",        glyph: "bedtime", confirm: false, hud: "Suspending",   gap: false },
+    { id: "logout",   label: "Log out",   hint: "",        glyph: "logout", confirm: true,  hud: "Logging out",  gap: true },
+    { id: "reboot",   label: "Restart",   hint: "",        glyph: "restart_alt", confirm: true,  hud: "Restarting",   gap: false },
+    { id: "poweroff", label: "Power off", hint: "",        glyph: "power_settings_new", confirm: true,  hud: "Powering off", gap: false }
 ]
 
 function isDestructive(id) {

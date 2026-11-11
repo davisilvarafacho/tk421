@@ -1,5 +1,6 @@
 import QtQuick
 
+import "../components"
 import "../notifications/logic.js" as Logic
 import "../services"
 import "../theme"
@@ -72,17 +73,14 @@ Item {
         }
     }
 
-    Text {
+    Icon {
         id: glyph
 
         x: 5
         anchors.verticalCenter: parent.verticalCenter
-        // Font Awesome bell / bell-slash from the Symbols Nerd Font.
-        text: Notifications.dnd ? "" : ""
+        name: Notifications.dnd ? "notifications_paused" : "notifications"
+        size: Theme.iconSize.bar
         color: bell.lit ? bell.c.text : "#B5BAC3"
-        renderType: Text.CurveRendering
-        font.family: Theme.iconFont
-        font.pixelSize: 14
 
         Behavior on color {
             ColorAnimation { duration: 140 }

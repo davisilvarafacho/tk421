@@ -46,13 +46,11 @@ BarPill {
                 }
             }
 
-            Text {
+            Icon {
                 anchors.centerIn: parent
-                text: ""      // Font Awesome chevron-down
+                name: "expand_more"
+                size: Theme.iconSize.panel
                 color: chevronArea.containsMouse || Dropdown.current === "tray" ? tray.c.text : "#B5BAC3"
-                renderType: Text.CurveRendering
-                font.family: Theme.iconFont
-                font.pixelSize: 10
             }
 
             Rectangle {

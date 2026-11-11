@@ -319,13 +319,11 @@ PanelWindow {
             readonly property int cells: 20
             readonly property int lit: Math.round(Math.max(0, Math.min(1, Audio.volume)) * cells)
 
-            Text {
-                renderType: Text.CurveRendering
+            Icon {
                 anchors.verticalCenter: parent.verticalCenter
-                text: parent.off ? "󰖁" : "󰕾"
+                name: parent.off ? "volume_off" : "volume_up"
+                size: 18
                 color: parent.off ? win.c.dangerText : win.c.text
-                font.family: Theme.iconFont
-                font.pixelSize: 18
             }
 
             // Segmented power-cell gauge (same as the sound flyout). Prototype: prototypes/sound-flyout/hud.html
@@ -390,15 +388,13 @@ PanelWindow {
                 }
             }
 
-            Text {
+            Icon {
                 visible: Hud.glyph !== ""
                 x: 20
                 anchors.verticalCenter: parent.verticalCenter
-                text: Hud.glyph
+                name: Hud.glyph
+                size: Theme.iconSize.bar      // the label starts at x 48: a 24 px hero glyph would leave 4 px
                 color: win.c.text
-                renderType: Text.CurveRendering
-                font.family: Theme.iconFont
-                font.pixelSize: 16
             }
 
             Image {

@@ -1,5 +1,6 @@
 import QtQuick
 
+import "../components"
 import "../dropdown/soundlogic.js" as Logic
 import "../services"
 import "../theme"
@@ -26,14 +27,14 @@ Item {
         }
     }
 
-    Text {
+    Icon {
         anchors.centerIn: parent
-        text: Logic.micGlyph(item.state_)
+        name: Logic.micGlyph(item.state_)
+        size: Theme.iconSize.bar
         color: item.state_ === "muted" ? item.c.dangerText : item.state_ === "missing" ? "#6D727B"
             : area.containsMouse ? item.c.text : "#B5BAC3"
-        renderType: Text.CurveRendering
-        font.family: Theme.iconFont
-        font.pixelSize: 14
+        // What shows behind the glyph, for the 1 px gap of the mute slash: the hover chip, or the bar.
+        gapColor: area.containsMouse ? item.c.surfaceAlt : item.c.ink
 
         Behavior on color {
             ColorAnimation { duration: 140 }

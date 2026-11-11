@@ -2,6 +2,7 @@ import QtQuick
 import QtTest
 
 import "../../dropdown/power.js" as Power
+import "../../theme/icons.js" as Icons
 
 TestCase {
     name: "PowerLogic"
@@ -63,5 +64,13 @@ TestCase {
         compare(Power.commandFor("hibernate", "/x"), null)
         compare(Power.commandFor("", "/x"), null)
         compare(Power.commandFor(undefined, "/x"), null)
+    }
+
+    function test_glyphs_are_icon_names() {
+        const want = { lock: "lock", suspend: "bedtime", logout: "logout", reboot: "restart_alt", poweroff: "power_settings_new" }
+        for (const a of Power.ACTIONS) {
+            compare(a.glyph, want[a.id], a.id)
+            verify(Icons.resolve(a.glyph) !== null, "unknown icon name: " + a.glyph)
+        }
     }
 }

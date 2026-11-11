@@ -2,6 +2,7 @@ import QtQuick
 import QtTest
 
 import "../../dropdown/soundlogic.js" as Sound
+import "../../theme/icons.js" as Icons
 
 TestCase {
     name: "SoundLogic"
@@ -44,28 +45,28 @@ TestCase {
 
     // ---- glyphs ----
     function test_speakerGlyph() {
-        compare(Sound.speakerGlyph(0.8, false), "󰕾")
-        compare(Sound.speakerGlyph(0.5, false), "󰖀")
-        compare(Sound.speakerGlyph(0.2, false), "󰕿")
-        compare(Sound.speakerGlyph(0, false), "󰖁")
-        compare(Sound.speakerGlyph(0.8, true), "󰖁")
+        compare(Sound.speakerGlyph(0.8, false), "volume_up")
+        compare(Sound.speakerGlyph(0.5, false), "volume_up")
+        compare(Sound.speakerGlyph(0.2, false), "volume_up")
+        compare(Sound.speakerGlyph(0, false), "volume_off")
+        compare(Sound.speakerGlyph(0.8, true), "volume_off")
     }
 
     function test_micGlyph() {
-        compare(Sound.micGlyph("on"), "")
-        compare(Sound.micGlyph("muted"), "")
-        compare(Sound.micGlyph("missing"), "")
+        compare(Sound.micGlyph("on"), "mic")
+        compare(Sound.micGlyph("muted"), "mic_muted")
+        compare(Sound.micGlyph("missing"), "mic")
     }
 
     // ---- device kind, glyph, sub line ----
     function test_deviceGlyph() {
-        compare(Sound.deviceGlyph("Navi 31 HDMI/DP Audio Digital Stereo (HDMI 4)", {}, true), "")
-        compare(Sound.deviceGlyph("WH-1000XM5", { "device.form-factor": "headphone" }, true), "")
-        compare(Sound.deviceGlyph("Headset", { "device.form-factor": "headset" }, false), "")
-        compare(Sound.deviceGlyph("Webcam C920", { "device.form-factor": "webcam" }, false), "")
-        compare(Sound.deviceGlyph("Built-in Audio Analog Stereo", {}, true), "")
-        compare(Sound.deviceGlyph("Built-in Audio Analog Stereo", {}, false), "")
-        compare(Sound.deviceGlyph("Anything", undefined, false), "")
+        compare(Sound.deviceGlyph("Navi 31 HDMI/DP Audio Digital Stereo (HDMI 4)", {}, true), "tv")
+        compare(Sound.deviceGlyph("WH-1000XM5", { "device.form-factor": "headphone" }, true), "headphones")
+        compare(Sound.deviceGlyph("Headset", { "device.form-factor": "headset" }, false), "headphones")
+        compare(Sound.deviceGlyph("Webcam C920", { "device.form-factor": "webcam" }, false), "videocam")
+        compare(Sound.deviceGlyph("Built-in Audio Analog Stereo", {}, true), "speaker")
+        compare(Sound.deviceGlyph("Built-in Audio Analog Stereo", {}, false), "mic")
+        compare(Sound.deviceGlyph("Anything", undefined, false), "mic")
     }
 
     function test_deviceSub() {
@@ -118,5 +119,22 @@ TestCase {
         compare(Sound.deviceName({ description: "Evil ‮name\n\u0007", nickname: "", name: "" }), "Evil name")
         compare(Sound.deviceName({ description: "x".repeat(100), nickname: "", name: "" }).length, 40)
         compare(Sound.deviceName({}), "Unknown device")
+    }
+
+    // Every name these functions can return must be in the icon table.
+    function test_allNamesKnown() {
+        const names = []
+        for (const v of [0, 0.2, 0.5, 0.8])
+            for (const m of [false, true])
+                names.push(Sound.speakerGlyph(v, m))
+        for (const st of ["on", "muted", "missing"])
+            names.push(Sound.micGlyph(st))
+        for (const ff of ["", "headphone", "headset", "hands-free", "handset", "webcam"])
+            for (const nm of ["Built-in Audio", "HDMI / DP Audio", "Thing DP 2"])
+                for (const out of [true, false])
+                    names.push(Sound.deviceGlyph(nm, { "device.form-factor": ff }, out))
+        names.push(Sound.deviceGlyph("x", undefined, true), Sound.deviceGlyph("x", undefined, false))
+        for (const n of names)
+            verify(Icons.resolve(n) !== null, "unknown icon name: " + n)
     }
 }

@@ -304,19 +304,17 @@ Item {
         spacing: 10
         opacity: 0.45
 
-        Text {
-            renderType: Text.CurveRendering
+        Icon {
             anchors.horizontalCenter: parent.horizontalCenter
-            text: "󰃭"    // nf-md-calendar
+            name: "calendar_today"
+            size: 34
             color: root.c.muted
-            font.family: Theme.iconFont
-            font.pixelSize: 34
         }
 
         Text {
             renderType: Text.CurveRendering
             anchors.horizontalCenter: parent.horizontalCenter
-            text: Agenda.status === "unconfigured" ? "calendar not set up..." : "no events..."
+            text: Agenda.status === "unconfigured" ? "Calendar not set up" : "Nothing planned"
             color: root.c.muted
             font.family: Theme.fontFamily
             font.pixelSize: 13

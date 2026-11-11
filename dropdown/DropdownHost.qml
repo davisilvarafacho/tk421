@@ -9,6 +9,7 @@ import "../theme"
 // The one window behind every bar dropdown (power, tray overflow, a tray app's menu, network, Bluetooth, sound).
 // The active panel unrolls from the capsules, exactly like the notification centre design.
 // Prototype: prototypes/toolbar/index.html. State: services/Dropdown.qml.
+// Panel icons are names from the Material Symbols table (theme/icons.js), drawn by components/Icon.qml; no font glyph literals here (final fix wave 2026-11-11).
 PanelWindow {
     id: win
 

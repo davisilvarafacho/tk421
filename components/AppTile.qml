@@ -37,13 +37,11 @@ Item {
         visible: status === Image.Ready
     }
 
-    Text {
+    Icon {
         anchors.centerIn: parent
         visible: !icon.visible
-        text: "󰂚"
+        name: "notifications"
         color: tile.critical ? Theme.imperial.dangerText : Theme.imperial.muted
-        renderType: Text.CurveRendering
-        font.family: Theme.iconFont
-        font.pixelSize: tile.size * 0.75
+        size: tile.size * 0.75
     }
 }

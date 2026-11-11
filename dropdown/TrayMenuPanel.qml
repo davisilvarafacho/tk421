@@ -4,6 +4,7 @@ import Quickshell.Services.SystemTray
 import QtQuick
 
 import "../bar/trayLogic.js" as Logic
+import "../components"
 import "../services"
 import "../theme"
 
@@ -157,14 +158,12 @@ Item {
                 opacity: backArea.containsMouse ? 1 : 0
             }
 
-            Text {
+            Icon {
                 x: 16
                 anchors.verticalCenter: parent.verticalCenter
-                text: ""      // Font Awesome chevron-left
+                name: "chevron_left"
                 color: panel.c.muted
-                renderType: Text.CurveRendering
-                font.family: Theme.iconFont
-                font.pixelSize: 10
+                size: Theme.iconSize.panel
             }
 
             Text {
@@ -231,16 +230,14 @@ Item {
                     }
 
                     // Check mark (check boxes) or dot (radio buttons).
-                    Text {
+                    Icon {
                         visible: !row.separator && (row.entry?.buttonType ?? 0) !== QsMenuButtonType.None
                             && row.entry?.checkState === Qt.Checked
                         x: 16
                         anchors.verticalCenter: parent.verticalCenter
-                        text: row.entry?.buttonType === QsMenuButtonType.RadioButton ? "" : ""
+                        name: row.entry?.buttonType === QsMenuButtonType.RadioButton ? "radio_checked" : "check"
                         color: panel.c.accent
-                        renderType: Text.CurveRendering
-                        font.family: Theme.iconFont
-                        font.pixelSize: row.entry?.buttonType === QsMenuButtonType.RadioButton ? 7 : 11
+                        size: Theme.iconSize.panel
                     }
 
                     Text {
@@ -259,16 +256,14 @@ Item {
                     }
 
                     // Submenu.
-                    Text {
+                    Icon {
                         visible: !row.separator && (row.entry?.hasChildren ?? false)
                         x: parent.width - 16 - implicitWidth
                         anchors.verticalCenter: parent.verticalCenter
-                        text: ""      // Font Awesome chevron-right
+                        name: "chevron_right"
                         opacity: row.enabledRow ? 1 : 0.4
                         color: panel.c.muted
-                        renderType: Text.CurveRendering
-                        font.family: Theme.iconFont
-                        font.pixelSize: 10
+                        size: Theme.iconSize.panel
                     }
 
                     MouseArea {

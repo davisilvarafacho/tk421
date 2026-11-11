@@ -1,5 +1,6 @@
 import QtQuick
 
+import "../components"
 import "../services"
 import "../theme"
 
@@ -24,14 +25,12 @@ Item {
         }
     }
 
-    Text {
+    Icon {
         anchors.centerIn: parent
-        // Material Design glyphs from the Symbols Nerd Font: ethernet, ethernet-off, wifi, wifi-off.
-        text: Net.mode === "eth" ? "󰈀" : Net.mode === "wifi" ? "󰖩" : Net.hasWifi ? "󰖪" : "󰈁"
+        // eth and "no network, no Wi-Fi" (dimmed by the colour below) share lan; Wi-Fi present but down is wifi_off.
+        name: Net.mode === "eth" ? "lan" : Net.mode === "wifi" ? "wifi" : Net.hasWifi ? "wifi_off" : "lan"
+        size: Theme.iconSize.bar
         color: button.lit ? button.c.text : Net.connected ? "#B5BAC3" : "#6D727B"
-        renderType: Text.CurveRendering
-        font.family: Theme.iconFont
-        font.pixelSize: 15
 
         Behavior on color {
             ColorAnimation { duration: 140 }
