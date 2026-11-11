@@ -105,4 +105,23 @@ TestCase {
         const l = [ent("a"), sep(), ent("b"), sep(), ent("c")]
         compare(shape(Tray.limitEntries(l, 2)), "a")                              // "a,-" would end on a separator
     }
+
+    // ---- overrideFor ----
+    function test_overrideFor_known_apps() {
+        compare(Tray.overrideFor("spotify-client"), "spotify.svg")
+        compare(Tray.overrideFor("TelegramDesktop"), "telegram.svg")
+        compare(Tray.overrideFor("github-desktop"), "github.svg")
+    }
+
+    function test_overrideFor_unknown_or_missing_is_empty() {
+        compare(Tray.overrideFor("unknown-app"), "")
+        compare(Tray.overrideFor(""), "")
+        compare(Tray.overrideFor(undefined), "")
+        compare(Tray.overrideFor(null), "")
+    }
+
+    function test_overrideFor_ignores_inherited_object_keys() {
+        compare(Tray.overrideFor("toString"), "")
+        compare(Tray.overrideFor("__proto__"), "")
+    }
 }

@@ -48,3 +48,21 @@ function limitEntries(entries, max) {
         out.pop()
     return out
 }
+
+// Apps whose own icon is replaced by a one-grey drawing from assets/tray/. Keys are the StatusNotifierItem ids
+// (measured: spotify-client, TelegramDesktop; the others are guesses to confirm with `tray list`).
+var OVERRIDES = {
+    "spotify-client": "spotify.svg",
+    "TelegramDesktop": "telegram.svg",
+    "discord": "discord.svg",
+    "steam": "steam.svg",
+    "firefox": "firefox.svg",
+    "github-desktop": "github.svg"
+}
+
+// File name under assets/tray/ for an app id, or "" when the app has no override.
+function overrideFor(id) {
+    if (typeof id !== "string" || !Object.prototype.hasOwnProperty.call(OVERRIDES, id))
+        return ""
+    return OVERRIDES[id]
+}

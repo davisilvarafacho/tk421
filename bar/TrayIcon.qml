@@ -1,9 +1,11 @@
 import Quickshell
 import Quickshell.Services.SystemTray
 import QtQuick
+import QtQuick.Effects
 
 import "../services"
 import "../theme"
+import "trayLogic.js" as Logic
 
 // One tray app in the capsule. Left-click activates it, middle-click is its secondary action, right-click opens its
 // own menu in the dropdown, the wheel is forwarded to the app (volume in a player, for example).
@@ -17,6 +19,8 @@ Item {
     readonly property bool attention: item?.status === Status.NeedsAttention
     readonly property bool menuOpen: Dropdown.current === "menu" && Dropdown.menuItem === item
     readonly property string name: Tray.nameOf(item)
+    // Apps with a one-grey drawing in assets/tray/ use it; the rest keep their own icon, turned to greyscale.
+    readonly property string overrideFile: Logic.overrideFor(item?.id)
 
     property bool tipOn: false
 
@@ -62,10 +66,14 @@ Item {
         anchors.centerIn: parent
         width: 16
         height: 16
-        source: icon.item?.icon ?? ""
+        source: icon.overrideFile !== "" ? "file://" + Quickshell.shellPath("assets/tray/" + icon.overrideFile) : (icon.item?.icon ?? "")
         sourceSize: Qt.size(32, 32)
         fillMode: Image.PreserveAspectFit
         asynchronous: true
+        layer.enabled: icon.overrideFile === "" && source != ""
+        layer.effect: MultiEffect {
+            saturation: -1
+        }
     }
 
     // The app asks for attention.
@@ -78,7 +86,7 @@ Item {
         radius: 5
         color: icon.c.accent
         border.width: 2
-        border.color: icon.c.surface
+        border.color: icon.c.ink       // ring cut out of the pill's black
     }
 
     MouseArea {
