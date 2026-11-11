@@ -18,7 +18,7 @@ PanelWindow {
     property bool opened: false
     property string shown: ""
 
-    readonly property real panelWidth: shown === "sound" ? 340 : shown === "net" || shown === "bt" ? 320 : shown === "tray" ? 280 : shown === "menu" ? 210 : 260
+    readonly property real panelWidth: shown === "sound" || shown === "keyboard" ? 340 : shown === "net" || shown === "bt" ? 320 : shown === "tray" ? 280 : shown === "menu" ? 210 : 260
     readonly property real hostLeft: (win.screen?.width ?? 2560) - 30 - win.width
     // The tray app's menu sits under the icon it belongs to; slot panels are right-aligned.
     readonly property real menuX: Math.max(12, Math.min(Dropdown.menuAnchorX - hostLeft - 24, win.width - 210 - 12))
@@ -30,7 +30,7 @@ PanelWindow {
     margins.top: 40
     margins.right: 30
     implicitWidth: 640
-    implicitHeight: 520
+    implicitHeight: shown === "keyboard" ? 800 : 520
     color: "transparent"
     exclusionMode: ExclusionMode.Ignore
 
@@ -168,7 +168,8 @@ PanelWindow {
                     : win.shown === "menu" ? "TrayMenuPanel.qml"
                     : win.shown === "net" ? "NetworkPanel.qml"
                     : win.shown === "bt" ? "BluetoothPanel.qml"
-                    : win.shown === "sound" ? "SoundPanel.qml" : ""
+                    : win.shown === "sound" ? "SoundPanel.qml"
+                    : win.shown === "keyboard" ? "KeyboardPanel.qml" : ""
             }
         }
     }

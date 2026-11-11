@@ -12,7 +12,7 @@ Singleton {
     // Referenced from shell.qml so the IPC handler exists from the start.
     readonly property bool active: true
 
-    readonly property var panels: ["power", "tray", "menu", "net", "bt", "sound"]     // later: "notif"
+    readonly property var panels: ["power", "tray", "menu", "net", "bt", "sound", "keyboard"]     // later: "notif"
 
     property string current: ""
     property var menuItem: null             // the SystemTrayItem whose menu the "menu" panel shows
