@@ -1,0 +1,804 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>TK-421 · Vivaldi · Bridge</title>
+<style>
+  /* Direction "BRIDGE": the browser chrome is a continuation of the shell bar.
+     The deck (every chrome row) is surface #0C0B0D; on it float pure-black 28 px capsules with the shell's 9 % white hairline,
+     exactly as the bar's capsules float on the wallpaper. Inside a capsule, items are 22 px chips: hover = #1A1A21 chip (radius 8).
+     Steel is spent only on: active tab rail, active panel rail, address focus line, loading progress, focus rings.
+     The address field is a centred pill (the island's twin) that widens on focus with the island's easing.
+     Prototype-only: the shell bar strip and the Hyprland border are context, they are not part of the theme. */
+  :root {
+    color-scheme: dark;
+    --ink: #000000;
+    --hair: rgba(255, 255, 255, 0.09);
+    --bg: #050505;
+    --deck: #0c0b0d;          /* surface */
+    --chip: #1a1a21;          /* surfaceAlt */
+    --text: #e8e6e3;
+    --muted: #8e8b88;
+    --steel: #506a9b;         /* accent: the only hue */
+    --steel-dim: #29384f;
+    --danger: #a14d55;
+    --border: #3f3e44;
+    --hypr: #3f8f8a;          /* Hyprland window border (context, not restyled) */
+
+    --ease: cubic-bezier(0.22, 1, 0.36, 1);
+    --display: "Orbitron", "Geist", ui-sans-serif, sans-serif;
+    --ui: "Geist", ui-sans-serif, system-ui, sans-serif;
+    --mono: "Geist Mono", ui-monospace, monospace;
+  }
+  .graphite { --steel: #b9b6b2; --steel-dim: #3f3e44; }   /* no-hue variant: the launcher's brushed steel */
+
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  html, body { background: #030303; }
+  body { font-family: var(--ui); color: var(--text); -webkit-font-smoothing: antialiased; min-height: 100vh; }
+  ::selection { background: var(--steel-dim); color: var(--text); }
+  button { font: inherit; color: inherit; background: none; border: 0; cursor: pointer; }
+  input { font: inherit; color: inherit; }
+  svg.i { display: block; width: 14px; height: 14px; fill: none; stroke: currentColor; stroke-width: 1.6; stroke-linecap: round; stroke-linejoin: round; flex: none; }
+  :focus-visible { outline: 1.5px solid var(--steel); outline-offset: 1px; }
+
+  /* ---------- prototype controls ---------- */
+  .proto {
+    display: flex; flex-wrap: wrap; align-items: center; gap: 14px 22px;
+    padding: 18px 24px 14px; max-width: 1456px; margin: 0 auto;
+  }
+  .proto h1 { font: 500 11px/1 var(--display); letter-spacing: 0.3em; color: var(--text); }
+  .proto h1 span { color: var(--muted); }
+  .seg { display: inline-flex; height: 28px; padding: 0 3px; align-items: center; gap: 2px; background: var(--ink); border: 1px solid var(--hair); border-radius: 14px; }
+  .seg button { height: 22px; padding: 0 10px; border-radius: 8px; font: 500 9px/22px var(--display); letter-spacing: 0.2em; color: var(--muted); transition: background-color 140ms, color 140ms; }
+  .seg button:hover { background: var(--chip); color: var(--text); }
+  .seg button[aria-pressed="true"] { background: var(--chip); color: var(--text); box-shadow: inset 0 -2px 0 -0.5px var(--steel); }
+  .proto .lbl { font: 500 9px/1 var(--display); letter-spacing: 0.24em; color: var(--muted); margin-right: -12px; }
+  .proto .note { margin-left: auto; font-size: 12px; color: var(--muted); }
+
+  /* ---------- screen (scaled to fit) ---------- */
+  .fit { max-width: 1456px; margin: 0 auto; overflow: hidden; }
+  .screen {
+    position: relative; width: 1456px; height: 968px; transform-origin: 0 0;
+    background: radial-gradient(120% 90% at 70% 0%, #1b1d22 0%, #0b0c0e 55%, #050505 100%);
+  }
+  /* shell bar, context only: 28 px black capsules 4 px below the edge, 30 px from the walls */
+  .shell { position: absolute; left: 0; right: 0; top: 0; height: 38px; }
+  .shell .cap { position: absolute; top: 4px; height: 28px; display: flex; align-items: center; gap: 10px; padding: 0 12px; background: var(--ink); border: 1px solid var(--hair); border-radius: 14px; font: 500 10px/1 var(--display); letter-spacing: 0.4px; color: #b5bac3; }
+  .shell .cap i { width: 1px; height: 12px; background: var(--border); }
+  .shell .ws b { width: 6px; height: 6px; border-radius: 3px; background: #4a4950; }
+  .shell .ws b.on { width: 16px; background: var(--text); }
+  .shell .island { gap: 0; left: 50%; top: 0; transform: translateX(-50%); height: 32px; width: 144px; justify-content: center; border-radius: 0 0 16px 16px; border-top: 0; font-size: 13px; letter-spacing: 0.04em; color: var(--text); }
+  .shell .island span { color: var(--muted); }
+  .ctx-tag { position: absolute; font: 500 8px/1 var(--display); letter-spacing: 0.24em; color: rgba(232, 230, 227, 0.35); }
+
+  /* ---------- the Vivaldi window ---------- */
+  .win {
+    position: absolute; left: 8px; top: 46px; width: 1440px; height: 900px;
+    border: 2px solid var(--hypr); border-radius: 10px; overflow: hidden;
+    background: var(--deck);
+    display: grid; grid-template-rows: 36px 36px 1fr 26px;
+  }
+
+  .row { display: flex; align-items: center; gap: 8px; padding: 0 18px; min-width: 0; }   /* 8 + 2 + 18 = 28 → pills line up with the shell's 30 px wall gap */
+  .cap {
+    height: 28px; display: flex; align-items: center; gap: 2px; padding: 0 3px; flex: none;
+    background: var(--ink); border: 1px solid var(--hair); border-radius: 14px;
+  }
+  .btn {
+    position: relative; height: 22px; min-width: 24px; padding: 0 5px; border-radius: 8px;
+    display: inline-flex; align-items: center; justify-content: center; color: #b5bac3;
+    transition: background-color 140ms, color 140ms;
+  }
+  .btn:hover { background: var(--chip); color: var(--text); }
+  .btn.dim { color: #5c5b60; pointer-events: none; }
+  .round { width: 28px; padding: 0; justify-content: center; }
+  .divider { width: 1px; height: 12px; background: var(--border); margin: 0 4px; flex: none; }
+
+  /* --- tab row --- */
+  .tabs { flex: 1; min-width: 0; justify-content: flex-start; padding: 0 3px; overflow: hidden; }
+  .tab {
+    position: relative; height: 22px; flex: 0 1 196px; min-width: 52px; display: flex; align-items: center; gap: 8px;
+    padding: 0 6px 0 8px; border-radius: 8px; color: var(--muted); cursor: default;
+    transition: background-color 140ms, color 140ms, flex-basis 260ms var(--ease);
+    animation: tab-in 320ms var(--ease) both;
+  }
+  @keyframes tab-in { from { opacity: 0; transform: translateY(4px); } }
+  .tab:hover { background: var(--chip); color: var(--text); }
+  .tab.active { background: var(--chip); color: var(--text); }
+  .tab::after {   /* the steel rail: active tab only */
+    content: ""; position: absolute; left: 50%; bottom: 0; width: 18px; height: 2px; margin-left: -9px; border-radius: 1px;
+    background: var(--steel); transform: scaleX(0); transition: transform 240ms var(--ease);
+  }
+  .tab.active::after { transform: scaleX(1); }
+  .tab.pinned { flex: 0 0 28px; min-width: 28px; padding: 0; justify-content: center; }
+  .tab.pinned .title, .tab.pinned .x, .tab.pinned .aud { display: none; }
+  .tab.pinned::after { width: 10px; margin-left: -5px; }
+  .tab + .tab:not(.pinned) { margin-left: 0; }
+  .tab .title { flex: 1; min-width: 0; font-size: 12.5px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .tab:not(.active):not(:hover) .title { -webkit-mask-image: linear-gradient(90deg, #000 80%, transparent); mask-image: linear-gradient(90deg, #000 80%, transparent); text-overflow: clip; }
+  .fav {   /* monogram favicon: no real logos */
+    width: 14px; height: 14px; flex: none; border-radius: 4px; display: grid; place-items: center;
+    background: #26262e; color: var(--text); font: 600 8px/1 var(--ui); letter-spacing: 0;
+  }
+  .tab.active .fav { background: var(--ink); }
+  .spin { width: 14px; height: 14px; flex: none; animation: spin 900ms linear infinite; }
+  .spin circle { fill: none; stroke-width: 1.8; }
+  .spin .trk { stroke: #2a2a31; }
+  .spin .arc { stroke: var(--steel); stroke-dasharray: 10 40; stroke-linecap: round; }
+  @keyframes spin { to { transform: rotate(360deg); } }
+  .aud { width: 18px; height: 18px; border-radius: 5px; display: grid; place-items: center; color: var(--text); flex: none; }
+  .aud:hover { background: #2a2a33; }
+  .aud .bars { display: flex; gap: 1.5px; align-items: flex-end; height: 9px; }
+  .aud .bars i { width: 2px; background: currentColor; border-radius: 1px; animation: eq 900ms ease-in-out infinite alternate; }
+  .aud .bars i:nth-child(2) { animation-delay: -300ms; } .aud .bars i:nth-child(3) { animation-delay: -600ms; }
+  .aud.muted .bars i { animation: none; height: 2px !important; }
+  @keyframes eq { from { height: 3px; } to { height: 9px; } }
+  .x { width: 18px; height: 18px; border-radius: 5px; display: grid; place-items: center; color: var(--muted); opacity: 0; flex: none; transition: opacity 120ms; }
+  .x svg.i { width: 10px; height: 10px; stroke-width: 1.8; }
+  .tab:hover .x, .tab.active .x { opacity: 1; }
+  .x:hover { background: #2a2a33; color: var(--text); }
+  .tab .load { position: absolute; left: 8px; right: 8px; bottom: 0; height: 1px; background: #26262e; overflow: hidden; border-radius: 1px; }
+  .tab .load i { position: absolute; inset: 0; background: var(--steel); transform-origin: left; transform: scaleX(var(--p, 0.3)); transition: transform 300ms linear; }
+  .tab.active .load { display: none; }   /* the active tab shows its progress in the address pill */
+  .pin-div { width: 1px; height: 12px; background: var(--border); flex: none; margin: 0 5px; }
+  .count { font: 500 9px/1 var(--display); letter-spacing: 0.16em; color: var(--muted); padding: 0 8px 0 6px; font-variant-numeric: tabular-nums; }
+
+  /* --- address row --- */
+  .nav { gap: 2px; }
+  .spacer { flex: 1; min-width: 8px; }
+  .addr-wrap { flex: 0 1 720px; min-width: 260px; position: relative; transition: flex-basis 520ms var(--ease); }
+  .addr-wrap.focus { flex-basis: 960px; }
+  .addr {
+    position: relative; height: 28px; display: flex; align-items: center; gap: 9px; padding: 0 6px 0 12px;
+    background: var(--ink); border: 1px solid var(--hair); border-radius: 14px; cursor: text; overflow: hidden;
+    transition: border-color 200ms;
+  }
+  .addr:hover { border-color: rgba(255, 255, 255, 0.14); }
+  .addr .lock { color: var(--muted); }
+  .addr .url { flex: 1; min-width: 0; font-size: 13px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; color: var(--muted); letter-spacing: 0.005em; }
+  .addr .url b { color: var(--text); font-weight: 400; }
+  .addr input { display: none; flex: 1; min-width: 0; height: 100%; background: transparent; border: 0; outline: 0; font-size: 13px; color: var(--text); caret-color: var(--text); }
+  .addr-wrap.focus .url { display: none; }
+  .addr-wrap.focus input { display: block; }
+  .addr .tag { font: 500 8px/1 var(--display); letter-spacing: 0.22em; color: var(--muted); opacity: 0.7; }
+  .addr .btn { height: 20px; min-width: 22px; }
+  .addr::before {   /* focus line: draws in from the left like the launcher */
+    content: ""; position: absolute; left: 14px; right: 14px; bottom: 0; height: 1px; background: var(--steel);
+    transform: scaleX(0); transform-origin: left; transition: transform 360ms var(--ease);
+  }
+  .addr-wrap.focus .addr::before { transform: scaleX(1); }
+  .addr .prog {   /* page-load progress: a steel hairline along the pill's floor */
+    position: absolute; left: 14px; right: 14px; bottom: 0; height: 1px; transform-origin: left; transform: scaleX(0);
+    background: var(--steel); opacity: 0; transition: transform 300ms linear, opacity 300ms;
+  }
+  .addr.loading .prog { opacity: 1; }
+  .addr-wrap.focus .prog { opacity: 0; }
+  .sugg {
+    position: absolute; left: 0; right: 0; top: 34px; z-index: 20; padding: 6px; display: none;
+    background: var(--ink); border: 1px solid var(--hair); border-radius: 14px; box-shadow: 0 24px 48px -16px rgba(0, 0, 0, 0.9);
+    animation: drop 260ms var(--ease) both;
+  }
+  .addr-wrap.focus .sugg { display: block; }
+  @keyframes drop { from { opacity: 0; transform: translateY(-6px); } }
+  .sugg .h { font: 500 8px/1 var(--display); letter-spacing: 0.26em; color: var(--muted); padding: 8px 10px 6px; }
+  .s-row { position: relative; display: flex; align-items: center; gap: 12px; height: 32px; padding: 0 10px; border-radius: 8px; font-size: 13px; color: var(--muted); cursor: default; }
+  .s-row .u { margin-left: auto; font-family: var(--mono); font-size: 11.5px; color: #5f5e63; }
+  .s-row.sel, .s-row:hover { background: var(--chip); color: var(--text); }
+  .s-row.sel::before { content: ""; position: absolute; left: 0; top: 10px; bottom: 10px; width: 2px; border-radius: 1px; background: var(--steel); }
+
+  /* --- main: panel bar, side panel, web view --- */
+  .main { display: flex; min-height: 0; padding: 0 0 0 18px; gap: 8px; }
+  .pbar { display: flex; flex-direction: column; align-items: center; gap: 8px; padding-top: 6px; width: 28px; flex: none; }
+  .vcap { width: 28px; display: flex; flex-direction: column; align-items: center; gap: 2px; padding: 3px 0; background: var(--ink); border: 1px solid var(--hair); border-radius: 14px; }
+  .vcap .btn { width: 22px; height: 24px; min-width: 0; padding: 0; }
+  .vcap .btn.on { background: var(--chip); color: var(--text); }
+  .vcap .btn::before { content: ""; position: absolute; left: -3px; top: 6px; bottom: 6px; width: 2px; border-radius: 1px; background: var(--steel); transform: scaleY(0); transition: transform 220ms var(--ease); }
+  .vcap .btn.on::before { transform: scaleY(1); }
+  .pbar .grow { flex: 1; }
+  .pbar .bottom { margin-bottom: 8px; }
+
+  .side {
+    width: 292px; flex: none; margin: 6px 0 8px; display: flex; flex-direction: column; min-height: 0;
+    background: var(--ink); border: 1px solid var(--hair); border-radius: 14px; overflow: hidden;
+    transition: width 420ms var(--ease), margin 420ms var(--ease), opacity 200ms;
+  }
+  .side.closed { width: 0; margin-left: -8px; opacity: 0; border-width: 0; }
+  .side-h { display: flex; align-items: center; gap: 8px; height: 40px; padding: 0 8px 0 16px; flex: none; }
+  .side-h h2 { font: 500 9.5px/1 var(--display); letter-spacing: 0.28em; color: var(--text); white-space: nowrap; }
+  .side-h .n { font: 500 9px/1 var(--display); letter-spacing: 0.14em; color: var(--muted); margin-left: 2px; font-variant-numeric: tabular-nums; }
+  .side-h .btn { margin-left: auto; }
+  .find { margin: 0 10px 8px; height: 28px; display: flex; align-items: center; gap: 8px; padding: 0 10px; border-radius: 14px; background: var(--deck); border: 1px solid var(--hair); color: var(--muted); flex: none; }
+  .find input { flex: 1; min-width: 0; background: transparent; border: 0; outline: 0; font-size: 12.5px; color: var(--text); }
+  .find input::placeholder { font: 500 9px/1 var(--display); letter-spacing: 0.24em; color: var(--muted); opacity: 0.6; }
+  .find:focus-within { border-color: var(--steel-dim); }
+  .tree { flex: 1; overflow-y: auto; padding: 0 6px 10px; scrollbar-width: thin; scrollbar-color: #2a2a31 transparent; }
+  .grp { font: 500 8px/1 var(--display); letter-spacing: 0.26em; color: var(--muted); padding: 14px 10px 7px; opacity: 0.8; }
+  .it { position: relative; display: flex; align-items: center; gap: 10px; height: 30px; padding: 0 10px; border-radius: 8px; font-size: 12.5px; color: #bdbab6; cursor: default; transition: background-color 120ms, color 120ms; }
+  .it:hover { background: var(--chip); color: var(--text); }
+  .it.sel { background: var(--chip); color: var(--text); }
+  .it.sel::before { content: ""; position: absolute; left: 0; top: 9px; bottom: 9px; width: 2px; border-radius: 1px; background: var(--steel); }
+  .it .t { flex: 1; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .it .m { font: 400 10.5px/1 var(--mono); color: #5f5e63; }
+  .it.folder { color: var(--text); }
+  .it.folder svg.i { color: var(--muted); }
+  .it.child { padding-left: 32px; }
+  .note-card { margin: 4px 4px 8px; padding: 12px 12px 11px; border-radius: 10px; border: 1px solid var(--hair); background: var(--deck); cursor: default; transition: border-color 140ms; }
+  .note-card:hover { border-color: rgba(255, 255, 255, 0.16); }
+  .note-card p { font-size: 12.5px; line-height: 1.5; color: #bdbab6; }
+  .note-card span { display: block; margin-top: 8px; font: 500 8px/1 var(--display); letter-spacing: 0.22em; color: var(--muted); }
+  .dl { margin: 4px 4px 6px; padding: 10px 12px; border-radius: 10px; background: var(--deck); border: 1px solid var(--hair); }
+  .dl .t { font-size: 12.5px; color: var(--text); }
+  .dl .m { margin-top: 6px; font: 400 10.5px/1 var(--mono); color: #6c6b70; }
+  .dl .bar { margin-top: 9px; height: 2px; background: #1f1f26; border-radius: 1px; overflow: hidden; }
+  .dl .bar i { display: block; height: 100%; background: var(--steel); }
+
+  .view { flex: 1; min-width: 0; margin: 6px 18px 8px 0; border-radius: 10px; overflow: hidden; position: relative; box-shadow: 0 0 0 1px var(--hair); }
+
+  /* fake web page: neutral, unbranded */
+  .page { position: absolute; inset: 0; overflow-y: auto; background: #f4f4f2; color: #1d1d1f; font-family: var(--ui); scrollbar-width: thin; }
+  .pg-top { height: 52px; display: flex; align-items: center; gap: 14px; padding: 0 32px; border-bottom: 1px solid #e2e2df; background: #fbfbfa; }
+  .pg-mark { width: 22px; height: 22px; border-radius: 6px; background: #d8d8d4; }
+  .pg-top .crumb { font-size: 14px; color: #55555a; } .pg-top .crumb b { color: #1d1d1f; font-weight: 600; }
+  .pg-top .sk { margin-left: auto; width: 220px; height: 28px; border-radius: 8px; background: #ececea; border: 1px solid #e2e2df; }
+  .pg-body { display: grid; grid-template-columns: 1fr 260px; gap: 28px; padding: 26px 32px 40px; }
+  .pg-body h1 { font-size: 22px; font-weight: 600; letter-spacing: -0.01em; }
+  .pg-body .lead { margin-top: 6px; font-size: 14px; color: #5b5b60; }
+  .pg-tabs { display: flex; gap: 22px; margin: 18px 0 0; border-bottom: 1px solid #e2e2df; font-size: 13px; color: #6a6a70; }
+  .pg-tabs span { padding: 0 0 10px; } .pg-tabs span.on { color: #1d1d1f; box-shadow: inset 0 -2px 0 #8a8a90; }
+  .files { margin-top: 18px; border: 1px solid #e2e2df; border-radius: 10px; overflow: hidden; background: #fff; }
+  .files .fh { display: flex; gap: 10px; align-items: center; padding: 11px 16px; background: #f7f7f5; border-bottom: 1px solid #ececea; font-size: 12.5px; color: #55555a; }
+  .files .fh b { color: #1d1d1f; font-weight: 600; }
+  .files .fh .r { margin-left: auto; font-family: var(--mono); font-size: 11.5px; }
+  .fr { display: grid; grid-template-columns: 22px 200px 1fr 90px; gap: 10px; align-items: center; padding: 9px 16px; border-bottom: 1px solid #f0f0ee; font-size: 13px; }
+  .fr:last-child { border-bottom: 0; }
+  .fr .ic { width: 14px; height: 12px; border-radius: 2px; background: #b9b9be; } .fr .ic.f { background: #d6d6d2; height: 14px; width: 12px; }
+  .fr a { color: #1d1d1f; text-decoration: none; } .fr a:hover { text-decoration: underline; }
+  .fr .c { color: #6a6a70; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .fr .d { color: #8a8a90; text-align: right; font-size: 12px; }
+  .readme { margin-top: 18px; border: 1px solid #e2e2df; border-radius: 10px; background: #fff; padding: 20px 24px 24px; }
+  .readme h3 { font-size: 17px; font-weight: 600; } .readme p { margin-top: 10px; font-size: 13.5px; line-height: 1.65; color: #3b3b40; max-width: 70ch; }
+  .readme pre { margin-top: 14px; padding: 12px 14px; border-radius: 8px; background: #f2f2f0; font: 12px/1.6 var(--mono); color: #3b3b40; }
+  .aside h4 { font-size: 13px; font-weight: 600; } .aside p { margin-top: 8px; font-size: 13px; line-height: 1.55; color: #55555a; }
+  .aside .pills { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 12px; }
+  .aside .pills span { font-size: 11.5px; padding: 3px 9px; border-radius: 10px; background: #e9e9e6; color: #45454a; }
+  .aside .sk { height: 10px; border-radius: 3px; background: #e6e6e3; margin-top: 10px; }
+  .aside hr { border: 0; border-top: 1px solid #e2e2df; margin: 18px 0; }
+
+  /* Start Page / Speed Dial */
+  .start { position: absolute; inset: 0; background: var(--bg); display: none; flex-direction: column; align-items: center; overflow: hidden; }
+  .start::before {   /* faint deck plating: one engraved horizon line, nothing more */
+    content: ""; position: absolute; left: 0; right: 0; top: 46%; height: 1px; background: linear-gradient(90deg, transparent, rgba(255,255,255,0.05) 20%, rgba(255,255,255,0.05) 80%, transparent);
+  }
+  .view.sp .start { display: flex; } .view.sp .page { display: none; }
+  .sp-nav { position: absolute; left: 22px; top: 18px; display: flex; gap: 18px; }
+  .sp-nav button { position: relative; font: 500 9px/1 var(--display); letter-spacing: 0.26em; color: var(--muted); padding: 4px 0 8px; transition: color 140ms; }
+  .sp-nav button:hover { color: var(--text); }
+  .sp-nav button.on { color: var(--text); }
+  .sp-nav button.on::after { content: ""; position: absolute; left: 0; width: 18px; bottom: 0; height: 2px; border-radius: 1px; background: var(--steel); }
+  .sp-tag { position: absolute; right: 22px; top: 18px; font: 500 9px/1 var(--display); letter-spacing: 0.26em; color: var(--muted); opacity: 0.7; }
+  .sp-clock { margin-top: 118px; font: 500 64px/1 var(--display); letter-spacing: 0.06em; font-variant-numeric: tabular-nums; color: var(--text); }
+  .sp-clock span { color: #4b4a50; }
+  .sp-date { margin-top: 14px; font: 500 9px/1 var(--display); letter-spacing: 0.4em; color: var(--muted); }
+  .sp-search { margin-top: 34px; width: 560px; height: 40px; display: flex; align-items: center; gap: 12px; padding: 0 18px; background: var(--ink); border: 1px solid var(--hair); border-radius: 20px; position: relative; overflow: hidden; }
+  .sp-search input { flex: 1; min-width: 0; background: transparent; border: 0; outline: 0; font-size: 14px; color: var(--text); }
+  .sp-search input::placeholder { font: 500 10px/1 var(--display); letter-spacing: 0.28em; color: var(--muted); opacity: 0.55; }
+  .sp-search svg.i { color: var(--muted); width: 15px; height: 15px; }
+  .sp-search::after { content: ""; position: absolute; left: 20px; right: 20px; bottom: 0; height: 1px; background: var(--steel); transform: scaleX(0); transform-origin: left; transition: transform 360ms var(--ease); }
+  .sp-search:focus-within::after { transform: scaleX(1); }
+  .dials { margin-top: 56px; display: grid; grid-template-columns: repeat(6, 132px); gap: 14px; }
+  .dial { height: 112px; border-radius: 14px; background: var(--ink); border: 1px solid var(--hair); display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 14px; cursor: default; position: relative; transition: background-color 160ms, border-color 160ms, transform 260ms var(--ease); }
+  .dial .mono { font: 500 22px/1 var(--display); letter-spacing: 0.06em; color: #c9c6c2; transition: color 160ms; }
+  .dial .nm { font-size: 12px; color: var(--muted); transition: color 160ms; }
+  .dial .ix { position: absolute; left: 10px; top: 9px; font: 500 7.5px/1 var(--display); letter-spacing: 0.2em; color: #4b4a50; }
+  .dial:hover { background: var(--chip); border-color: rgba(255,255,255,0.12); transform: translateY(-2px); }
+  .dial:hover .mono { color: #fff; } .dial:hover .nm { color: var(--text); }
+  .dial.add { background: transparent; border: 1px dashed #2c2c33; }
+  .dial.add .mono { font-size: 18px; color: #5c5b60; }
+
+  /* --- status bar --- */
+  .status { gap: 10px; padding: 0 18px 0 22px; }
+  .status .info { flex: 1; min-width: 0; font-size: 11.5px; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .status .info b { color: #bdbab6; font-weight: 400; }
+  .status .cap { height: 20px; border-radius: 10px; padding: 0 2px; }
+  .status .btn { height: 16px; min-width: 20px; border-radius: 6px; padding: 0 5px; }
+  .status .btn svg.i { width: 12px; height: 12px; }
+  .status .zoom { font: 500 8.5px/1 var(--display); letter-spacing: 0.12em; }
+  .status .clock { font: 500 9.5px/1 var(--display); letter-spacing: 0.08em; padding: 0 8px 0 4px; color: var(--text); font-variant-numeric: tabular-nums; }
+
+  /* ---------- spec panel ---------- */
+  .spec { max-width: 1456px; margin: 26px auto 60px; padding: 0 24px; display: grid; grid-template-columns: minmax(0, 0.9fr) minmax(0, 1.1fr); gap: 20px; }
+  .card { background: var(--ink); border: 1px solid var(--hair); border-radius: 14px; padding: 20px 22px 22px; min-width: 0; }
+  .card h3 { font: 500 9.5px/1 var(--display); letter-spacing: 0.28em; color: var(--text); }
+  .card h3 small { font: inherit; color: var(--muted); letter-spacing: 0.2em; margin-left: 8px; }
+  .card p, .card li { font-size: 13px; line-height: 1.6; color: #bdbab6; }
+  .card p { margin-top: 10px; }
+  .card ul { margin-top: 10px; padding-left: 18px; }
+  .card li { margin-top: 4px; }
+  .card li b { color: var(--text); font-weight: 500; }
+  .card code { font: 12px/1.5 var(--mono); color: var(--text); background: var(--chip); padding: 1px 5px; border-radius: 4px; }
+  pre.code { margin-top: 12px; padding: 14px 16px; border-radius: 10px; background: var(--deck); border: 1px solid var(--hair); font: 11.5px/1.6 var(--mono); color: #c9c6c2; overflow-x: auto; white-space: pre; scrollbar-width: thin; }
+  pre.code .k { color: var(--text); } pre.code .c { color: #6c6b70; } pre.code .s { color: #9fb0cf; }
+  .graphite pre.code .s { color: #d6d3cf; }
+  .flag { display: inline-block; font: 500 7.5px/1 var(--display); letter-spacing: 0.2em; color: var(--muted); border: 1px solid var(--border); border-radius: 4px; padding: 3px 5px 2px; vertical-align: 2px; margin-left: 6px; }
+  .card + .card { }
+  .stack { display: grid; gap: 20px; align-content: start; min-width: 0; }
+</style>
+</head>
+<body>
+
+<div class="proto">
+  <h1>TK-421 · VIVALDI <span>· BRIDGE</span></h1>
+  <span class="lbl">VIEW</span>
+  <div class="seg" id="viewSeg"><button data-v="page" aria-pressed="true">WEB PAGE</button><button data-v="start" aria-pressed="false">START PAGE</button></div>
+  <span class="lbl">ACCENT</span>
+  <div class="seg" id="accSeg"><button data-a="steel" aria-pressed="true">STEEL #506A9B</button><button data-a="graphite" aria-pressed="false">GRAPHITE · NO HUE</button></div>
+  <span class="note">Hover anything · click tabs, the address pill, panel icons · × closes, ⟲ restores</span>
+</div>
+
+<div class="fit" id="fit">
+<div class="screen" id="screen">
+  <!-- shell bar (context) -->
+  <div class="shell">
+    <div class="cap ws" style="left:30px"><b class="on"></b><b></b><b></b><b></b></div>
+    <div class="cap" style="left:118px">CPU 12% <i></i> RAM 38% <i></i> GPU 4%</div>
+    <div class="cap island">14<span>:</span>32</div>
+    <div class="cap" style="right:30px">
+      <svg class="i" viewBox="0 0 24 24"><path d="M2 12h3l3-7 4 14 3-7h7"/></svg>
+      <svg class="i" viewBox="0 0 24 24"><path d="M11 5 6 9H3v6h3l5 4z"/><path d="M15.5 8.5a5 5 0 0 1 0 7"/></svg>
+      <svg class="i" viewBox="0 0 24 24"><path d="M6 8a6 6 0 0 1 12 0c0 7 3 9 3 9H3s3-2 3-9"/><path d="M10.3 21a1.94 1.94 0 0 0 3.4 0"/></svg>
+      <svg class="i" viewBox="0 0 24 24"><path d="M12 3v9"/><path d="M6.4 6.4a8 8 0 1 0 11.2 0"/></svg>
+    </div>
+  </div>
+  <span class="ctx-tag" style="left:30px; top:954px">HYPRLAND BORDER · NOT RESTYLED</span>
+
+  <div class="win" id="win">
+    <!-- ===== tab row ===== -->
+    <div class="row">
+      <div class="cap"><button class="btn round" title="Vivaldi menu" style="width:22px;min-width:22px">
+        <!-- the TK-421 mark (Death Star line icon from the launcher) replaces the browser logo -->
+        <svg class="i" viewBox="0 0 24 24" style="width:15px;height:15px"><circle cx="12" cy="12" r="8.6"/><path d="M3.4 12.6h17.2"/><circle cx="15.6" cy="8.4" r="2.2"/></svg>
+      </button></div>
+      <div class="cap tabs" id="tabs"></div>
+      <div class="cap"><button class="btn" id="newTab" title="New tab"><svg class="i" viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg></button></div>
+      <div class="cap"><button class="btn" id="restore" title="Closed tabs"><svg class="i" viewBox="0 0 24 24"><path d="M3 12a9 9 0 1 0 3-6.7L3 8"/><path d="M3 3v5h5"/></svg></button><span class="count" id="count">06</span></div>
+    </div>
+
+    <!-- ===== address row ===== -->
+    <div class="row">
+      <div class="cap nav">
+        <button class="btn" title="Back"><svg class="i" viewBox="0 0 24 24"><path d="M15 18l-6-6 6-6"/></svg></button>
+        <button class="btn dim" title="Forward"><svg class="i" viewBox="0 0 24 24"><path d="M9 18l6-6-6-6"/></svg></button>
+        <button class="btn" id="reload" title="Reload"><svg class="i" viewBox="0 0 24 24"><path d="M21 12a9 9 0 1 1-3-6.7L21 8"/><path d="M21 3v5h-5"/></svg></button>
+        <button class="btn" title="Home"><svg class="i" viewBox="0 0 24 24"><path d="M4 11l8-7 8 7v9h-5v-6H9v6H4z"/></svg></button>
+      </div>
+      <div class="spacer"></div>
+      <div class="addr-wrap" id="addrWrap">
+        <div class="addr" id="addr">
+          <svg class="i lock" viewBox="0 0 24 24" style="width:12px;height:12px"><rect x="5" y="11" width="14" height="10" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/></svg>
+          <span class="url" id="url"></span>
+          <input id="addrInput" type="text" spellcheck="false" autocomplete="off" aria-label="Address">
+          <span class="tag" id="addrTag"></span>
+          <button class="btn" title="Bookmark"><svg class="i" viewBox="0 0 24 24" style="width:13px;height:13px"><path d="M12 3l2.7 5.6 6.1.9-4.4 4.3 1 6.1L12 17l-5.4 2.9 1-6.1-4.4-4.3 6.1-.9z"/></svg></button>
+          <i class="prog" id="prog"></i>
+        </div>
+        <div class="sugg" id="sugg">
+          <div class="h">SUGGESTIONS</div>
+          <div class="s-row sel"><svg class="i" viewBox="0 0 24 24"><circle cx="11" cy="11" r="6.5"/><path d="M20 20l-4.2-4.2"/></svg><span>quickshell layer shell</span><span class="u">search</span></div>
+          <div class="s-row"><svg class="i" viewBox="0 0 24 24"><path d="M12 7v5l3 2"/><circle cx="12" cy="12" r="9"/></svg><span>Configuration · Quickshell</span><span class="u">docs.example.org/quickshell</span></div>
+          <div class="s-row"><svg class="i" viewBox="0 0 24 24"><path d="M6 3h12v18l-6-4-6 4z"/></svg><span>Variables · Window manager wiki</span><span class="u">wiki.example.org/variables</span></div>
+        </div>
+      </div>
+      <div class="spacer"></div>
+      <div class="cap">
+        <button class="btn" title="Extensions"><svg class="i" viewBox="0 0 24 24"><path d="M9 4h4v3a2 2 0 1 0 4 0V4h3v6h-3a2 2 0 1 0 0 4h3v6h-6v-3a2 2 0 1 0-4 0v3H4v-6h3a2 2 0 1 0 0-4H4V4z"/></svg></button>
+        <button class="btn" title="Downloads"><svg class="i" viewBox="0 0 24 24"><path d="M12 4v11M7 10l5 5 5-5M5 20h14"/></svg></button>
+        <button class="btn" id="panelToggle" title="Toggle panel"><svg class="i" viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="16" rx="2"/><path d="M9 4v16"/></svg></button>
+        <span class="divider"></span>
+        <button class="btn" title="Profile"><span class="fav" style="background:#26262e">TK</span></button>
+      </div>
+    </div>
+
+    <!-- ===== main ===== -->
+    <div class="main">
+      <div class="pbar">
+        <div class="vcap" id="pbar">
+          <button class="btn on" data-p="bookmarks" title="Bookmarks"><svg class="i" viewBox="0 0 24 24"><path d="M6 3h12v18l-6-4-6 4z"/></svg></button>
+          <button class="btn" data-p="reading" title="Reading list"><svg class="i" viewBox="0 0 24 24"><path d="M4 6h16M4 12h10M4 18h7"/></svg></button>
+          <button class="btn" data-p="downloads" title="Downloads"><svg class="i" viewBox="0 0 24 24"><path d="M12 4v11M7 10l5 5 5-5M5 20h14"/></svg></button>
+          <button class="btn" data-p="history" title="History"><svg class="i" viewBox="0 0 24 24"><path d="M12 7v5l3 2"/><circle cx="12" cy="12" r="9"/></svg></button>
+          <button class="btn" data-p="notes" title="Notes"><svg class="i" viewBox="0 0 24 24"><path d="M4 20h4L19 9l-4-4L4 16z"/><path d="M13.5 6.5l4 4"/></svg></button>
+          <button class="btn" data-p="window" title="Window"><svg class="i" viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="16" rx="2"/><path d="M3 9h18"/></svg></button>
+        </div>
+        <div class="grow"></div>
+        <div class="vcap bottom">
+          <button class="btn" title="Settings"><svg class="i" viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M12 2v3M12 19v3M4.9 4.9l2.1 2.1M17 17l2.1 2.1M2 12h3M19 12h3M4.9 19.1 7 17M17 7l2.1-2.1"/></svg></button>
+        </div>
+      </div>
+
+      <aside class="side" id="side">
+        <div class="side-h"><h2 id="sideTitle">BOOKMARKS</h2><span class="n" id="sideN">24</span>
+          <button class="btn" title="New"><svg class="i" viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg></button>
+        </div>
+        <label class="find"><svg class="i" viewBox="0 0 24 24" style="width:12px;height:12px"><circle cx="11" cy="11" r="6.5"/><path d="M20 20l-4.2-4.2"/></svg><input placeholder="FILTER"></label>
+        <div class="tree" id="tree"></div>
+      </aside>
+
+      <section class="view" id="view">
+        <div class="page" id="page"></div>
+        <div class="start" id="start">
+          <div class="sp-nav"><button class="on">SPEED DIAL</button><button>BOOKMARKS</button><button>HISTORY</button></div>
+          <div class="sp-tag">TK-421</div>
+          <div class="sp-clock" id="spClock">14<span>:</span>32</div>
+          <div class="sp-date" id="spDate">WEDNESDAY · 11 NOV</div>
+          <label class="sp-search"><svg class="i" viewBox="0 0 24 24"><circle cx="11" cy="11" r="6.5"/><path d="M20 20l-4.2-4.2"/></svg><input placeholder="AWAITING ORDERS"></label>
+          <div class="dials" id="dials"></div>
+        </div>
+      </section>
+    </div>
+
+    <!-- ===== status bar ===== -->
+    <div class="row status">
+      <span class="info" id="info">Done</span>
+      <div class="cap">
+        <button class="btn" title="Tiling"><svg class="i" viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="16" rx="2"/><path d="M12 4v16"/></svg></button>
+        <button class="btn" title="Images"><svg class="i" viewBox="0 0 24 24"><rect x="3" y="5" width="18" height="14" rx="2"/><path d="M3 16l5-5 4 4 3-3 6 6"/></svg></button>
+        <button class="btn zoom" title="Zoom">100%</button>
+        <span class="clock" id="clock">14:32</span>
+      </div>
+    </div>
+  </div>
+</div>
+</div>
+
+<!-- ================= spec ================= -->
+<div class="spec">
+  <div class="stack">
+    <div class="card">
+      <h3>THEME EDITOR <small>SETTINGS.JSON</small></h3>
+      <p>Settings › Themes › Editor. Keys checked against a public exported-theme template (engineVersion 1); export any theme from Vivaldi 8.2 and diff before importing, newer builds may add keys. <code>id</code> is any fresh UUID. The <code>//</code> notes are annotation only: strip them, JSON has no comments.</p>
+<pre class="code">{
+  <span class="k">"name"</span>: <span class="s">"TK-421 Bridge"</span>,
+  <span class="k">"id"</span>: <span class="s">"6f56d71a-b0b8-4c0f-b33f-63c64a409885"</span>,
+  <span class="k">"version"</span>: 1,
+  <span class="k">"engineVersion"</span>: 1,
+  <span class="k">"colorWindowBg"</span>: <span class="s">"#000000"</span>,   <span class="c">// tab bar = shell ink</span>
+  <span class="k">"colorBg"</span>: <span class="s">"#0C0B0D"</span>,         <span class="c">// toolbars, panels, active tab = surface</span>
+  <span class="k">"colorFg"</span>: <span class="s">"#E8E6E3"</span>,
+  <span class="k">"colorAccentBg"</span>: <span class="s">"#1A1A21"</span>,   <span class="c">// graphite chip, never a hue</span>
+  <span class="k">"colorHighlightBg"</span>: <span class="s">"#506A9B"</span>,<span class="c">// steel: focus, selection, progress</span>
+  <span class="k">"accentFromPage"</span>: false,
+  <span class="k">"accentOnWindow"</span>: false,
+  <span class="k">"accentSaturationLimit"</span>: 0,
+  <span class="k">"preferSystemAccent"</span>: false,
+  <span class="k">"radius"</span>: 8,                <span class="c">// = the hover chip; pills get 14 via CSS</span>
+  <span class="k">"transparencyTabs"</span>: false,
+  <span class="k">"transparencyTabBar"</span>: false,
+  <span class="k">"alpha"</span>: 1,
+  <span class="k">"blur"</span>: 0,
+  <span class="k">"dimBlurred"</span>: false,
+  <span class="k">"contrast"</span>: 0,
+  <span class="k">"simpleScrollbar"</span>: true,
+  <span class="k">"backgroundImage"</span>: <span class="s">""</span>,
+  <span class="k">"backgroundPosition"</span>: <span class="s">"stretch"</span>,
+  <span class="k">"url"</span>: <span class="s">""</span>
+}</pre>
+      <p>No-hue variant: <code>colorHighlightBg "#B9B6B2"</code> (the launcher's brushed steel), nothing else changes.</p>
+    </div>
+    <div class="card">
+      <h3>REACHABLE WITHOUT CSS</h3>
+      <ul>
+        <li><b>Theme:</b> black tab bar, surface toolbars and panels, graphite text, steel only on focus / selection / load progress, no page-tinted accent, no transparency or blur, slim scrollbars, 8 px corners everywhere.</li>
+        <li><b>Settings › Tabs:</b> tab bar <b>top</b>; pinned tabs as icons; tab stacks compact. <b>Address bar:</b> top, highlight base domain on. <b>Panel:</b> left, panel toggle on the address bar. <b>Status bar:</b> shown. <b>Start Page:</b> Speed Dial, theme background, no thumbnails background image.</li>
+        <li><b>Toolbar editor:</b> trim the address row to back, forward, reload, home · field · extensions, downloads, panel toggle, profile.</li>
+        <li>What that alone gives: a correct, quiet dark theme. It does <i>not</i> give floating pills, the centred address pill, chip tabs or the steel rails.</li>
+      </ul>
+    </div>
+  </div>
+
+  <div class="stack">
+    <div class="card">
+      <h3>NEEDS CSS MODS <span class="flag">SELECTORS UNVERIFIED</span></h3>
+      <p>vivaldi://experiments › “Allow for using CSS modifications”, then Settings › Appearance › Custom UI Modifications → a folder holding <code>tk421-bridge.css</code>. Inspect the UI first (vivaldi://inspect/#apps › the browser window); class names below are from 6.x/7.x mods in the wild and may have moved in 8.x.</p>
+      <ul>
+        <li><b>Deck + capsules:</b> every chrome row on <code>#0C0B0D</code>; tab strip, nav group, toolbar group as black 28 px capsules with the 9 % hairline.</li>
+        <li><b>Chip tabs:</b> 22 px tabs inside the capsule, hover/active = <code>#1A1A21</code> chip, active adds an 18 × 2 px steel rail; loading tab shows a 1 px steel bar. Pinned tabs end with a divider.</li>
+        <li><b>Address pill:</b> centred, max 720 px, widens to 960 px on focus (520 ms, island easing), steel line draws in under it; load progress as a hairline on its floor; suggestions card black, radius 14.</li>
+        <li><b>Panels:</b> panel bar as a vertical capsule with a steel rail on the open panel; side panel as a floating black card, radius 14, Orbitron header.</li>
+        <li><b>Web view</b> inset 6 px with 10 px corners and a hairline; <b>status bar</b> 26 px with a 20 px capsule (tiling, images, zoom, clock in Orbitron).</li>
+        <li><b>Speed Dial:</b> black tiles + hairline, monogram via custom dial thumbnails (or hide thumbnails and enlarge the favicon), Orbitron clock and section labels.</li>
+        <li><b>Housekeeping:</b> hide the window buttons (tiled under Hyprland), swap the browser logo in the menu button for the TK-421 mark, Geist as the UI font.</li>
+      </ul>
+<pre class="code"><span class="c">/* tk421-bridge.css  — sketch, Vivaldi 8.x, UNVERIFIED */</span>
+:root { --tk-ink:#000; --tk-hair:rgba(255,255,255,.09);
+        --tk-chip:#1A1A21; --tk-deck:#0C0B0D; --tk-steel:var(--colorHighlightBg); }
+#browser { font-family: Geist, sans-serif; }
+#header, .mainbar, #footer { background: var(--tk-deck) !important; }
+
+<span class="c">/* tab strip → one capsule; tabs → chips */</span>
+#tabs-container { padding: 4px 18px; }
+#tabs-container .tab-strip { background: var(--tk-ink); border: 1px solid var(--tk-hair);
+  border-radius: 14px; }
+.tab-position .tab { background: transparent; border-radius: 8px; box-shadow: none; }
+.tab-position .tab:hover,
+.tab-position .tab.active { background: var(--tk-chip); }
+.tab-position .tab.active::after { content: ""; position: absolute; left: 50%;
+  bottom: 0; width: 18px; height: 2px; margin-left: -9px; background: var(--tk-steel); }
+.tab-position.is-pinned:not(:has(+ .is-pinned)) { <span class="c">/* divider after pins */</span> }
+.window-buttongroup { display: none; }
+
+<span class="c">/* address field → centred pill, island morph on focus */</span>
+.UrlBar-AddressField { height: 28px; max-width: 720px; margin-inline: auto;
+  background: var(--tk-ink); border: 1px solid var(--tk-hair); border-radius: 14px;
+  transition: max-width 520ms cubic-bezier(.22,1,.36,1); }
+.UrlBar-AddressField:focus-within { max-width: 960px;
+  box-shadow: inset 0 -1px 0 var(--tk-steel); }
+.UrlBar-AddressField .pageload-indicator { background: var(--tk-steel); height: 1px; }
+.OmniDropdown { background: var(--tk-ink); border-radius: 14px; }
+
+<span class="c">/* panels */</span>
+#panels-container #switch { <span class="c">/* 7.x+: .toolbar-panel? */</span>
+  background: var(--tk-ink); border: 1px solid var(--tk-hair); border-radius: 14px; }
+#panels-container .panel-group { margin: 6px 0 8px; border-radius: 14px;
+  background: var(--tk-ink); border: 1px solid var(--tk-hair); }
+#webview-container .webpageview { margin: 6px 18px 8px 0; border-radius: 10px;
+  overflow: hidden; box-shadow: 0 0 0 1px var(--tk-hair); }
+
+<span class="c">/* speed dial */</span>
+.startpage .dial { background: var(--tk-ink); border: 1px solid var(--tk-hair);
+  border-radius: 14px; }
+.startpage .dial:hover { background: var(--tk-chip); }</pre>
+      <p><b>Risks:</b> Vivaldi's UI is its own React app; class names and DOM nesting change between majors (7.0's redesign moved the toolbars and the Speed Dial dashboard). Tab sizes and positions are computed in JS and written inline, so forcing heights or margins can make tabs overlap or clip; prefer padding on containers over sizing <code>.tab</code>. The mods fail silently after an update (the chrome falls back to the plain theme, which is why the theme alone must look right), and the experiments flag could be renamed. Keep the file small and comment each block with the Vivaldi version it was checked on.</p>
+    </div>
+  </div>
+</div>
+
+<script>
+  const $ = (s, r = document) => r.querySelector(s);
+  const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
+  const IC = {
+    x: '<svg class="i" viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18"/></svg>',
+    folder: '<svg class="i" viewBox="0 0 24 24" style="width:13px;height:13px"><path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/></svg>',
+  };
+
+  /* ---------- tabs (fake, generic) ---------- */
+  let tabs = [
+    { id: 1, pinned: true, mono: "M", title: "Mail · Inbox", host: "mail.example.com", path: "/inbox" },
+    { id: 2, pinned: true, mono: "C", title: "Calendar", host: "calendar.example.com", path: "/week" },
+    { id: 3, mono: "Q", title: "quickshell-mirror/quickshell", host: "github.com", path: "/quickshell-mirror/quickshell" },
+    { id: 4, mono: "W", title: "Variables · Window manager wiki", host: "wiki.example.org", path: "/configuring/variables", loading: 0.18 },
+    { id: 5, mono: "R", title: "Deep space radio · Live", host: "radio.example.net", path: "/live/ambient", audio: true },
+    { id: 6, mono: "P", title: "Package search · Example Linux", host: "packages.example.org", path: "/search?q=vivaldi" },
+    { id: 7, mono: "D", title: "QML types reference · Docs", host: "docs.example.org", path: "/qml/types/item" },
+  ];
+  let active = 3, closed = [], nextId = 100;
+
+  function renderTabs() {
+    const el = $("#tabs");
+    const pins = tabs.filter((t) => t.pinned), rest = tabs.filter((t) => !t.pinned);
+    const one = (t) => `
+      <div class="tab${t.pinned ? " pinned" : ""}${t.id === active ? " active" : ""}" data-id="${t.id}" title="${esc(t.title)}">
+        ${t.loading != null ? '<svg class="spin" viewBox="0 0 16 16"><circle class="trk" cx="8" cy="8" r="6"/><circle class="arc" cx="8" cy="8" r="6"/></svg>' : `<span class="fav">${esc(t.mono)}</span>`}
+        <span class="title">${esc(t.title)}</span>
+        ${t.audio ? `<span class="aud${t.muted ? " muted" : ""}" data-act="mute" title="Mute tab"><span class="bars"><i style="height:5px"></i><i style="height:8px"></i><i style="height:4px"></i></span></span>` : ""}
+        <span class="x" data-act="close" title="Close">${IC.x}</span>
+        ${t.loading != null ? `<span class="load"><i style="--p:${t.loading}"></i></span>` : ""}
+      </div>`;
+    el.innerHTML = pins.map(one).join("") + (pins.length ? '<span class="pin-div"></span>' : "") + rest.map(one).join("");
+    $("#count").textContent = String(tabs.length).padStart(2, "0");
+    renderAddr();
+  }
+
+  function cur() { return tabs.find((t) => t.id === active); }
+
+  function renderAddr() {
+    const t = cur(), sp = !t || t.start;
+    $("#url").innerHTML = sp ? '<span style="font:500 9px/1 var(--display);letter-spacing:.26em">START PAGE</span>' : `<b>${esc(t.host)}</b>${esc(t.path)}`;
+    $("#addrTag").textContent = sp ? "" : "";
+    $("#view").classList.toggle("sp", !!sp);
+    const loading = t && t.loading != null;
+    $("#addr").classList.toggle("loading", loading);
+    $("#prog").style.transform = `scaleX(${loading ? t.loading : 0})`;
+    $("#info").innerHTML = loading ? `Loading <b>${esc(t.host)}</b> · ${Math.round(t.loading * 31)} of 31 elements` : "Done";
+    syncSeg();
+    if (!sp) renderPage(t);
+  }
+
+  /* ---------- fake web page (neutral, unbranded) ---------- */
+  function renderPage(t) {
+    const repo = t.id === 3;
+    const files = [
+      ["f", "src", "Layer shell: honour exclusive zones on resize", "2 days ago"],
+      ["f", "docs", "Document the IPC handler targets", "last week"],
+      ["f", "examples", "Add a minimal bar example", "3 weeks ago"],
+      ["", "CMakeLists.txt", "Bump minimum Qt version", "last month"],
+      ["", "README.md", "Fix the build instructions link", "last month"],
+      ["", "LICENSE", "Initial import", "2 years ago"],
+    ];
+    $("#page").innerHTML = `
+      <div class="pg-top"><span class="pg-mark"></span><span class="crumb">${repo ? 'quickshell-mirror / <b>quickshell</b>' : `<b>${esc(t.title)}</b>`}</span><span class="sk"></span></div>
+      <div class="pg-body">
+        <div>
+          <h1>${repo ? "quickshell" : esc(t.title)}</h1>
+          <p class="lead">${repo ? "A toolkit for building desktop shells in QML. Read-only mirror." : "Placeholder page content for the theme mock."}</p>
+          <div class="pg-tabs"><span class="on">Overview</span><span>Files</span><span>Changes</span><span>Discussions</span></div>
+          <div class="files">
+            <div class="fh"><b>example-user</b> Layer shell: honour exclusive zones on resize <span class="r">a1c9e42 · 2 days ago</span></div>
+            ${files.map(([k, n, c, d]) => `<div class="fr"><span class="ic ${k}"></span><a href="#" data-href="https://${esc(t.host)}${esc(t.path)}/${n}">${n}</a><span class="c">${c}</span><span class="d">${d}</span></div>`).join("")}
+          </div>
+          <div class="readme">
+            <h3>Getting started</h3>
+            <p>This is neutral filler text standing in for a real page. It is here so the chrome can be judged against a bright document: how the black capsules, the hairline and the inset view frame the content without competing with it.</p>
+            <pre>$ example-tool build --release
+$ example-tool run -p ./shell.qml</pre>
+            <p>The page owns its own colours. The theme never tints the chrome from the page (accent from page is off), so a bright site does not leak into the deck.</p>
+          </div>
+        </div>
+        <div class="aside">
+          <h4>About</h4>
+          <p>Toolkit for building desktop shells. Filler description.</p>
+          <div class="pills"><span>qml</span><span>wayland</span><span>desktop</span><span>shell</span></div>
+          <hr>
+          <h4>Releases</h4>
+          <div class="sk" style="width:70%"></div><div class="sk" style="width:45%"></div>
+          <hr>
+          <h4>Contributors</h4>
+          <div class="sk" style="width:85%"></div><div class="sk" style="width:60%"></div><div class="sk" style="width:75%"></div>
+        </div>
+      </div>`;
+  }
+
+  /* ---------- tab interactions ---------- */
+  $("#tabs").addEventListener("click", (e) => {
+    const tabEl = e.target.closest(".tab"); if (!tabEl) return;
+    const id = +tabEl.dataset.id, t = tabs.find((x) => x.id === id);
+    const act = e.target.closest("[data-act]")?.dataset.act;
+    if (act === "close") {
+      const i = tabs.indexOf(t); closed.push({ t, i }); tabs.splice(i, 1);
+      if (active === id) active = (tabs[Math.min(i, tabs.length - 1)] || {}).id;
+      if (!tabs.length) newTab();
+    } else if (act === "mute") { t.muted = !t.muted; }
+    else active = id;
+    renderTabs();
+  });
+  $("#tabs").addEventListener("auxclick", (e) => { const x = e.target.closest(".tab"); if (e.button === 1 && x) x.querySelector('[data-act="close"]').click(); });
+  $("#restore").addEventListener("click", () => { const c = closed.pop(); if (!c) return; tabs.splice(c.i, 0, c.t); active = c.t.id; renderTabs(); });
+  function newTab() { const t = { id: nextId++, mono: "·", title: "Start Page", start: true }; tabs.push(t); active = t.id; renderTabs(); }
+  $("#newTab").addEventListener("click", newTab);
+  $("#reload").addEventListener("click", () => { const t = cur(); if (t && !t.start && t.loading == null) { t.loading = 0.05; renderTabs(); } });
+
+  /* fake load progress: the wiki tab loads, finishes, rests, starts over */
+  setInterval(() => {
+    let dirty = false;
+    for (const t of tabs) {
+      if (t.loading == null) continue;
+      t.loading = Math.min(1, t.loading + Math.random() * 0.06);
+      if (t.loading >= 1) { t.loading = null; if (t.id === 4) setTimeout(() => { const w = tabs.find((x) => x.id === 4); if (w) { w.loading = 0.04; renderTabs(); } }, 4000); }
+      dirty = true;
+    }
+    if (!dirty) return;
+    // update in place to keep hover states stable
+    for (const t of tabs) {
+      const el = document.querySelector(`.tab[data-id="${t.id}"]`); if (!el) continue;
+      const bar = el.querySelector(".load i");
+      if ((t.loading != null) !== !!el.querySelector(".spin")) { renderTabs(); return; }
+      if (bar) bar.style.setProperty("--p", t.loading);
+    }
+    const c = cur();
+    if (c && c.loading != null) { $("#prog").style.transform = `scaleX(${c.loading})`; $("#info").innerHTML = `Loading <b>${esc(c.host)}</b> · ${Math.round(c.loading * 31)} of 31 elements`; }
+  }, 280);
+
+  /* ---------- address pill: focus morph ---------- */
+  const wrap = $("#addrWrap"), input = $("#addrInput");
+  $("#addr").addEventListener("mousedown", (e) => {
+    if (e.target.closest(".btn") || wrap.classList.contains("focus")) return;
+    e.preventDefault(); const t = cur();
+    wrap.classList.add("focus"); input.value = t && !t.start ? `https://${t.host}${t.path}` : ""; input.focus(); input.select();
+  });
+  input.addEventListener("blur", () => wrap.classList.remove("focus"));
+  input.addEventListener("keydown", (e) => { if (e.key === "Escape" || e.key === "Enter") input.blur(); });
+
+  /* ---------- panels ---------- */
+  const PANELS = {
+    bookmarks: { title: "BOOKMARKS", n: "24", html: () => `
+      <div class="grp">PINNED</div>
+      <div class="it sel"><span class="fav">Q</span><span class="t">Quickshell · Docs</span><span class="m">docs</span></div>
+      <div class="it"><span class="fav">W</span><span class="t">Window manager wiki</span><span class="m">wiki</span></div>
+      <div class="grp">FOLDERS</div>
+      <div class="it folder">${IC.folder}<span class="t">Shell</span><span class="m">07</span></div>
+      <div class="it child"><span class="fav">L</span><span class="t">Layer shell protocol</span></div>
+      <div class="it child"><span class="fav">P</span><span class="t">PipeWire notes</span></div>
+      <div class="it child"><span class="fav">M</span><span class="t">MPRIS specification</span></div>
+      <div class="it folder">${IC.folder}<span class="t">Reference</span><span class="m">09</span></div>
+      <div class="it folder">${IC.folder}<span class="t">Reading</span><span class="m">05</span></div>
+      <div class="it folder">${IC.folder}<span class="t">Hardware</span><span class="m">03</span></div>
+      <div class="grp">UNSORTED</div>
+      <div class="it"><span class="fav">T</span><span class="t">Typography in interfaces</span></div>
+      <div class="it"><span class="fav">G</span><span class="t">Grid systems, revisited</span></div>` },
+    reading: { title: "READING LIST", n: "06", html: () => `
+      <div class="grp">UNREAD</div>
+      <div class="it sel"><span class="fav">E</span><span class="t">Engineering cold interfaces</span><span class="m">12 min</span></div>
+      <div class="it"><span class="fav">S</span><span class="t">Shells without a compositor</span><span class="m">8 min</span></div>
+      <div class="it"><span class="fav">N</span><span class="t">Notes on easing curves</span><span class="m">5 min</span></div>
+      <div class="grp">READ</div>
+      <div class="it"><span class="fav">B</span><span class="t">Btrfs subvolume layouts</span><span class="m">—</span></div>` },
+    downloads: { title: "DOWNLOADS", n: "03", html: () => `
+      <div class="grp">ACTIVE</div>
+      <div class="dl"><div class="t">example-toolkit-0.3.2.tar.gz</div><div class="m">4.1 / 6.8 MB · 12 s</div><div class="bar"><i style="width:60%"></i></div></div>
+      <div class="grp">EARLIER</div>
+      <div class="it"><span class="fav">Z</span><span class="t">wallpaper-pack.zip</span><span class="m">48 MB</span></div>
+      <div class="it"><span class="fav">P</span><span class="t">manual.pdf</span><span class="m">2 MB</span></div>` },
+    history: { title: "HISTORY", n: "TODAY", html: () => `
+      <div class="grp">THIS MORNING</div>
+      ${["Variables · Window manager wiki", "QML types reference", "Package search", "Deep space radio", "quickshell-mirror/quickshell"].map((s, i) => `<div class="it${i ? "" : " sel"}"><span class="fav">${s[0]}</span><span class="t">${s}</span><span class="m">${["14:28", "14:11", "13:52", "13:40", "13:02"][i]}</span></div>`).join("")}
+      <div class="grp">YESTERDAY</div>
+      <div class="it"><span class="fav">D</span><span class="t">Docs · Layer shell</span><span class="m">22:15</span></div>` },
+    notes: { title: "NOTES", n: "03", html: () => `
+      <div class="grp">RECENT</div>
+      <div class="note-card"><p>Try the tab strip as one capsule with chips inside; keep steel for the active rail only.</p><span>TODAY · 14:20</span></div>
+      <div class="note-card"><p>Address pill should line up under the island when the window is full width.</p><span>TODAY · 11:05</span></div>
+      <div class="note-card"><p>Check CSS selectors after every major update.</p><span>MON · 09:40</span></div>` },
+    window: { title: "WINDOW", n: "07", html: () => tabs.map((t) => `<div class="it${t.id === active ? " sel" : ""}"><span class="fav">${esc(t.mono)}</span><span class="t">${esc(t.title)}</span><span class="m">${t.pinned ? "pin" : ""}</span></div>`).join("") },
+  };
+  let panel = "bookmarks";
+  function renderPanel() {
+    const p = PANELS[panel];
+    $("#sideTitle").textContent = p.title; $("#sideN").textContent = p.n; $("#tree").innerHTML = p.html();
+    document.querySelectorAll("#pbar .btn").forEach((b) => b.classList.toggle("on", b.dataset.p === panel && !$("#side").classList.contains("closed")));
+  }
+  $("#pbar").addEventListener("click", (e) => {
+    const b = e.target.closest(".btn"); if (!b) return;
+    const side = $("#side");
+    if (b.dataset.p === panel && !side.classList.contains("closed")) side.classList.add("closed");
+    else { panel = b.dataset.p; side.classList.remove("closed"); }
+    renderPanel();
+  });
+  $("#panelToggle").addEventListener("click", () => { $("#side").classList.toggle("closed"); renderPanel(); });
+  $("#tree").addEventListener("click", (e) => { const it = e.target.closest(".it"); if (!it) return; $("#tree").querySelectorAll(".it").forEach((x) => x.classList.toggle("sel", x === it)); });
+
+  /* ---------- status bar: hovered link ---------- */
+  $("#page").addEventListener("mouseover", (e) => { const a = e.target.closest("a[data-href]"); if (a) $("#info").innerHTML = `<b>${esc(a.dataset.href)}</b>`; });
+  $("#page").addEventListener("mouseout", (e) => { if (e.target.closest("a[data-href]")) renderAddrInfo(); });
+  $("#page").addEventListener("click", (e) => { if (e.target.closest("a")) e.preventDefault(); });
+  function renderAddrInfo() { const t = cur(); $("#info").innerHTML = t && t.loading != null ? `Loading <b>${esc(t.host)}</b>` : "Done"; }
+
+  /* ---------- speed dial ---------- */
+  const DIALS = [["QS", "Quickshell docs"], ["WK", "Wiki"], ["PK", "Packages"], ["ML", "Mail"], ["CL", "Calendar"], ["RD", "Radio"], ["DC", "QML reference"], ["NT", "Notes"], ["RP", "Repositories"], ["NW", "News"], ["MP", "Maps"]];
+  $("#dials").innerHTML = DIALS.map(([m, n], i) => `<div class="dial"><span class="ix">${String(i + 1).padStart(2, "0")}</span><span class="mono">${m}</span><span class="nm">${n}</span></div>`).join("") + '<div class="dial add"><span class="mono">+</span><span class="nm">Add</span></div>';
+
+  /* ---------- prototype toggles ---------- */
+  function syncSeg() {
+    const sp = $("#view").classList.contains("sp");
+    document.querySelectorAll("#viewSeg button").forEach((b) => b.setAttribute("aria-pressed", String((b.dataset.v === "start") === sp)));
+  }
+  $("#viewSeg").addEventListener("click", (e) => {
+    const b = e.target.closest("button"); if (!b) return;
+    if (b.dataset.v === "start") { const s = tabs.find((t) => t.start); if (s) { active = s.id; renderTabs(); } else newTab(); }
+    else { active = 3; if (!tabs.find((t) => t.id === 3)) { const c = closed.find((x) => x.t.id === 3); if (c) { tabs.splice(c.i, 0, c.t); closed.splice(closed.indexOf(c), 1); } else active = tabs.find((t) => !t.start)?.id; } renderTabs(); }
+  });
+  $("#accSeg").addEventListener("click", (e) => {
+    const b = e.target.closest("button"); if (!b) return;
+    document.body.classList.toggle("graphite", b.dataset.a === "graphite");
+    document.querySelectorAll("#accSeg button").forEach((x) => x.setAttribute("aria-pressed", String(x === b)));
+  });
+
+  /* ---------- clock + fit ---------- */
+  function tick() {
+    const d = new Date(), hh = String(d.getHours()).padStart(2, "0"), mm = String(d.getMinutes()).padStart(2, "0");
+    $("#clock").textContent = `${hh}:${mm}`;
+    $("#spClock").innerHTML = `${hh}<span>:</span>${mm}`;
+    $(".shell .island").innerHTML = `${hh}<span>:</span>${mm}`;
+    $("#spDate").textContent = d.toLocaleDateString("en-GB", { weekday: "long", day: "2-digit", month: "short" }).replace(",", " ·").toUpperCase();
+  }
+  function fit() {
+    const w = $("#fit").clientWidth, s = Math.min(1, w / 1456);
+    $("#screen").style.transform = `scale(${s})`; $("#fit").style.height = `${968 * s}px`;
+  }
+  addEventListener("resize", fit);
+  tick(); setInterval(tick, 10000); fit();
+  renderTabs(); renderPanel();
+  if (location.hash === "#start") newTab();
+  if (location.hash === "#graphite") $('#accSeg [data-a="graphite"]').click();
+</script>
+</body>
+</html>

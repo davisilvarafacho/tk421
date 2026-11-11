@@ -1,0 +1,155 @@
+/*
+ * TK-421 · COMMAND DECK (graphite signal) — Vivaldi 8.2 UI modifications.
+ * Prototype: prototypes/vivaldi/command-deck.html (approved 2026-11-11 with the GRAPHITE signal).
+ *
+ * The theme (vivaldi/theme/settings.json) already gives the colours: ink tab bar, #0C0B0D toolbars, graphite
+ * highlight, radius 2, no transparency. This file only adds what the theme editor cannot do. Every selector here was
+ * checked against /opt/vivaldi/resources/vivaldi/style/common.css of 8.2.4133; if an update renames one, that rule
+ * simply stops applying and the theme underneath stays coherent.
+ *
+ * Load it: vivaldi://experiments → "Allow for using CSS modifications", then Settings → Appearance →
+ * Custom UI Modifications → this folder, then restart Vivaldi.
+ */
+
+#browser {
+    --tk-ink: #000000;
+    --tk-hair: rgba(255, 255, 255, 0.09);
+    --tk-muted: #8E8B88;
+    --tk-dim: #5E5C5A;
+    --tk-danger: #D9808A;
+    --tk-signal: var(--colorHighlightBg);       /* graphite #B9B6B2 from the theme */
+    --tk-mono: "Monaspace Neon", "Geist Mono", ui-monospace, monospace;
+    --tk-label: "Orbitron", "Geist", sans-serif;
+    font-family: "Geist", system-ui, sans-serif;
+}
+
+/* ── Tabs: flat segments split by hairlines; the active one is marked by a 2 px signal underline, not a fill ── */
+
+#browser .tab-position .tab {
+    border-radius: 0 !important;
+    background-color: transparent !important;
+    box-shadow: inset -1px 0 0 var(--tk-hair);
+    transition: background-color 140ms, color 140ms;
+}
+
+#browser .tab-position .tab:not(.active) {
+    color: var(--tk-muted);
+}
+
+#browser .tab-position .tab:not(.active):hover {
+    background-color: var(--colorBg) !important;
+    color: var(--colorFg);
+}
+
+#browser #tabs-container .tab-position .tab.active.active {
+    background-color: var(--colorBg) !important;
+    color: var(--colorFg) !important;
+    border-color: transparent !important;
+    box-shadow: inset 0 -2px 0 var(--tk-signal), inset -1px 0 0 var(--tk-hair);
+}
+
+/* Favicons stay grey until the tab is looked at: colour never fights the black chrome. */
+#browser .tab-position .tab:not(.active):not(:hover) .favicon:not(.progress) {
+    filter: grayscale(1) opacity(0.7) !important;
+}
+
+/* Loading spinner in the signal grey instead of the page accent. */
+#browser .tab .favicon.progress {
+    color: var(--tk-signal);
+}
+
+#browser .tab .title {
+    letter-spacing: 0.01em;
+}
+
+/* ── Address bar and search field: an ink well with a hairline, the signal on focus ── */
+
+#browser .mainbar {
+    box-shadow: inset 0 -1px 0 var(--tk-hair);
+}
+
+#browser .UrlBar-AddressField,
+#browser .SearchField {
+    background-color: var(--tk-ink) !important;
+    border: 1px solid var(--tk-hair) !important;
+    border-radius: 2px !important;
+}
+
+#browser .UrlBar-AddressField:focus-within,
+#browser .SearchField:focus-within {
+    border-color: var(--tk-signal) !important;
+    box-shadow: none !important;
+}
+
+/* An insecure page is the only place red appears. */
+#browser .SiteInfoButton.warning {
+    color: var(--tk-danger) !important;
+    fill: var(--tk-danger) !important;
+}
+
+/* ── Panel bar: ink rail, the open panel marked by a 2 px signal edge ── */
+
+#browser #switch {
+    background-color: var(--tk-ink);
+    box-shadow: inset -1px 0 0 var(--tk-hair);
+}
+
+#browser #switch > .button-toolbar.active,
+#browser #switch > * > .button-toolbar.active,
+#browser #switch > button.active {
+    background-color: transparent !important;
+    box-shadow: inset 2px 0 0 var(--tk-signal);
+}
+
+#browser .panel-group {
+    box-shadow: inset -1px 0 0 var(--tk-hair);
+}
+
+/* Web panel favicons (Mastodon, Vivaldi…) grey like the tab favicons, colour back on hover or while open. */
+#browser #switch .button-toolbar-webpanel:not(:hover):not(.active) img {
+    filter: grayscale(1) opacity(0.7);
+}
+
+/* ── Status bar: ink strip, mono readouts ── */
+
+#browser .toolbar-statusbar {
+    background-color: var(--tk-ink) !important;
+    box-shadow: inset 0 1px 0 var(--tk-hair);
+    color: var(--tk-muted);
+}
+
+#browser .toolbar-statusbar #status,
+#browser .toolbar-statusbar .page-zoom-controls,
+#browser .toolbar-statusbar input.zoom-percent {
+    font-family: var(--tk-mono);
+    font-size: 11px;
+}
+
+#browser .toolbar-statusbar .toolbar-divider {
+    background-color: var(--tk-hair);
+}
+
+/* The link preview that pops over the page bottom-left. */
+#browser .StatusInfo-Content {
+    font-family: var(--tk-mono);
+    font-size: 11px;
+    background-color: var(--tk-ink);
+    color: var(--tk-muted);
+    border: 1px solid var(--tk-hair);
+}
+
+/* ── Start Page: Speed Dial titles as Imperial micro-labels ── */
+
+.startpage .SpeedDial .dial-title,
+.startpage .SpeedDial .thumbnail-title {
+    font-family: var(--tk-label);
+    font-size: 9px;
+    letter-spacing: 0.18em;
+    text-transform: uppercase;
+    color: var(--tk-muted);
+}
+
+.startpage .SpeedDial:hover .dial-title,
+.startpage .SpeedDial:hover .thumbnail-title {
+    color: var(--colorFg);
+}

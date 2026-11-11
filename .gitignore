@@ -6,3 +6,6 @@ agenda/.venv/
 __pycache__/
 wallpaper/state.json
 .pytest_cache/
+
+# Vivaldi theme zip, built by vivaldi/build-theme.lua
+vivaldi/dist/

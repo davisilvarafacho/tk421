@@ -1,0 +1,834 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>TK-421 · Vivaldi · Command Deck</title>
+<style>
+  /* COMMAND DECK: the browser as an Imperial bridge console.
+     Palette is Theme.imperial verbatim. Steel blue (--accent) is only the active / focus signal, red only danger.
+     Corners 0-2 px, 1 px hairline rules, Orbitron micro-labels for chrome sections, Monaspace Neon for readouts.
+     The window mock is 1440 x 900 CSS px and scales down to fit; the spec panel sits under it. */
+  :root {
+    color-scheme: dark;
+    --ink: #000000;
+    --bg: #050505;
+    --surface: #0c0b0d;
+    --surface-alt: #1a1a21;
+    --text: #e8e6e3;
+    --muted: #8e8b88;
+    --accent: #506a9b;
+    --accent-dim: #29384f;
+    --danger: #a14d55;
+    --danger-text: #d9808a;
+    --border: #3f3e44;
+    --hair: rgba(255, 255, 255, 0.09);
+
+    --display: "Orbitron", "Geist", ui-sans-serif, sans-serif;
+    --ui: "Geist", ui-sans-serif, system-ui, sans-serif;
+    --mono: "Monaspace Neon", "Monaspace Argon", ui-monospace, monospace;
+    --ease: cubic-bezier(0.22, 1, 0.36, 1);
+  }
+  /* Signal variant: the launcher's graphite steel instead of blue (the user rejected hue there). */
+  .graphite { --accent: #b9b6b2; --accent-dim: #3f3e44; }
+
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  html { background: var(--bg); }
+  body { font-family: var(--ui); color: var(--text); background: var(--bg); -webkit-font-smoothing: antialiased; overflow-x: hidden; }
+  button { font: inherit; color: inherit; background: none; border: 0; cursor: default; }
+  input { font: inherit; color: inherit; }
+  ::selection { background: var(--accent-dim); color: var(--text); }
+  svg.i { width: 16px; height: 16px; fill: none; stroke: currentColor; stroke-width: 1.4; stroke-linecap: square; stroke-linejoin: miter; flex: none; }
+
+  /* shared type roles */
+  .ml { font: 500 8.5px/1 var(--display); letter-spacing: 0.22em; text-transform: uppercase; color: var(--muted); }
+  .ro { font: 400 11px/1 var(--mono); font-variant-numeric: tabular-nums; color: var(--text); }
+
+  /* ================= bench (prototype only) ================= */
+  .bench { display: flex; flex-wrap: wrap; align-items: center; gap: 12px 24px; padding: 20px 24px 16px; max-width: 1488px; margin: 0 auto; }
+  .bench h1 { font: 600 11px/1 var(--display); letter-spacing: 0.3em; color: var(--text); }
+  .bench h1 span { color: var(--muted); font-weight: 500; }
+  .bench .grow { flex: 1; }
+  .seg { display: inline-flex; border: 1px solid var(--hair); }
+  .seg-l { margin-right: 8px; }
+  .seg button { height: 26px; padding: 0 12px; font: 500 8.5px/1 var(--display); letter-spacing: 0.2em; color: var(--muted); transition: color 140ms, background-color 140ms; }
+  .seg button + button { border-left: 1px solid var(--hair); }
+  .seg button:hover { color: var(--text); background: var(--surface); }
+  .seg button[aria-pressed="true"] { color: var(--text); background: var(--surface-alt); box-shadow: inset 0 -2px 0 var(--accent); }
+  .ctl { display: inline-flex; align-items: center; }
+  .note { width: 100%; font-size: 12.5px; color: var(--muted); line-height: 1.5; }
+
+  .stage { max-width: 1488px; margin: 0 auto; padding: 0 24px; }
+  .fit { position: relative; }
+  .win {
+    position: absolute; left: 0; top: 0; width: 1440px; height: 900px; transform-origin: 0 0;
+    display: grid; grid-template-rows: 34px 40px minmax(0, 1fr) 24px; grid-template-columns: minmax(0, 1fr); background: var(--ink);
+    outline: 1px solid var(--border); overflow: hidden;
+  }
+
+  /* ================= tab bar (theme: Accent = ink, accent on window) ================= */
+  .tabbar { display: flex; align-items: stretch; background: var(--ink); border-bottom: 1px solid var(--hair); position: relative; z-index: 1; }
+  .vmenu { width: 36px; display: grid; place-items: center; color: var(--muted); border-right: 1px solid var(--hair); transition: color 140ms, background-color 140ms; }
+  .vmenu:hover { color: var(--text); background: var(--surface); }
+  .vmenu svg { width: 18px; height: 18px; }
+  .strip { display: flex; min-width: 0; flex: 0 1 auto; overflow: hidden; }
+  .tab {
+    position: relative; display: flex; align-items: center; gap: 8px; flex: 0 1 212px; min-width: 112px; padding: 0 8px 0 12px;
+    border-right: 1px solid var(--hair); color: var(--muted); transition: color 140ms, background-color 140ms; cursor: default;
+  }
+  .tab.pinned { flex: 0 0 40px; min-width: 40px; padding: 0; justify-content: center; }
+  .tab:hover { background: var(--surface); color: #c9c6c2; }
+  .tab.active { color: var(--text); }
+  .tab::after { /* the active signal: 2 px steel underline, no filled shape */
+    content: ""; position: absolute; left: 0; right: 0; bottom: -1px; height: 2px; background: var(--accent);
+    transform: scaleX(0); transition: transform 260ms var(--ease);
+  }
+  .tab.active::after { transform: scaleX(1); }
+  .fav {
+    width: 14px; height: 14px; flex: none; display: grid; place-items: center;
+    border: 1px solid var(--border); font: 600 6.5px/1 var(--display); letter-spacing: 0; color: var(--muted);
+  }
+  .tab.active .fav { border-color: #6b6970; color: var(--text); }
+  .fav.spin { border: 0; }
+  .fav.spin svg { width: 14px; height: 14px; animation: spin 900ms linear infinite; stroke: var(--muted); fill: none; stroke-width: 1.6; }
+  @keyframes spin { to { transform: rotate(360deg); } }
+  .ttl { flex: 1; min-width: 0; font-size: 12.5px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .pct { font-size: 10px; color: var(--muted); }
+  .tab .bar { position: absolute; left: 0; bottom: 0; height: 1px; background: var(--muted); opacity: 0.7; transition: width 160ms linear; }
+  .x, .aud { width: 18px; height: 18px; display: grid; place-items: center; color: var(--muted); flex: none; transition: color 140ms, background-color 140ms; }
+  .x { opacity: 0; }
+  .tab:hover .x, .tab.active .x { opacity: 1; }
+  .x:hover, .aud:hover { background: var(--surface-alt); color: var(--text); }
+  .x svg { width: 12px; height: 12px; }
+  .eq { display: flex; align-items: flex-end; gap: 2px; height: 10px; }
+  .eq i { width: 2px; background: currentColor; animation: eq 900ms ease-in-out infinite; }
+  .eq i:nth-child(2) { animation-delay: -300ms; } .eq i:nth-child(3) { animation-delay: -600ms; }
+  @keyframes eq { 0%, 100% { height: 3px; } 50% { height: 10px; } }
+  .aud svg { width: 13px; height: 13px; }
+  .newtab { flex: none; width: 34px; display: grid; place-items: center; color: var(--muted); border-right: 1px solid var(--hair); transition: color 140ms, background-color 140ms; }
+  .newtab:hover { color: var(--text); background: var(--surface); }
+  .tabcount { flex: none; margin-left: auto; display: flex; align-items: center; gap: 8px; padding: 0 14px; border-left: 1px solid var(--hair); }
+
+  /* ================= address bar (theme: Background) ================= */
+  .addr { display: flex; align-items: center; gap: 2px; padding: 0 8px 0 2px; background: var(--surface); border-bottom: 1px solid var(--hair); }
+  .ib { width: 32px; height: 30px; display: grid; place-items: center; color: var(--muted); border-radius: 2px; transition: color 140ms, background-color 140ms; }
+  .ib:hover { color: var(--text); background: var(--surface-alt); }
+  .ib[disabled] { opacity: 0.35; pointer-events: none; }
+  .ib:focus-visible, .seg button:focus-visible, .tile:focus-visible { outline: 1px solid var(--accent); outline-offset: -1px; }
+  .url {
+    position: relative; flex: 1; height: 28px; margin: 0 6px; display: flex; align-items: center;
+    background: var(--ink); border: 1px solid var(--hair); border-radius: 2px; transition: border-color 160ms;
+  }
+  .url:hover { border-color: var(--border); }
+  .url.edit { border-color: var(--accent); }
+  .badge { display: flex; align-items: center; gap: 7px; height: 100%; padding: 0 10px; border-right: 1px solid var(--hair); color: var(--muted); }
+  .badge svg { width: 13px; height: 13px; }
+  .badge.bad { color: var(--danger-text); }
+  .badge.bad .ml { color: var(--danger-text); }
+  .badge.none { display: none; }
+  .utext { flex: 1; min-width: 0; padding: 0 12px; font-size: 13.5px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; cursor: text; }
+  .utext .host { color: var(--text); }
+  .utext .path, .utext .ph { color: var(--muted); }
+  .utext .scheme { color: var(--danger-text); }
+  .url input { flex: 1; min-width: 0; height: 100%; padding: 0 12px; background: transparent; border: 0; outline: 0; font-size: 13.5px; caret-color: var(--text); }
+  .url .load { position: absolute; left: 0; bottom: -1px; height: 1px; background: var(--accent); transition: width 160ms linear; }
+  .star.on svg { fill: var(--text); stroke: var(--text); }
+  .search { width: 220px; height: 28px; display: flex; align-items: center; gap: 8px; padding: 0 10px; background: var(--ink); border: 1px solid var(--hair); border-radius: 2px; color: var(--muted); transition: border-color 160ms; }
+  .search:hover { border-color: var(--border); }
+  .search:focus-within { border-color: var(--accent); }
+  .search input { flex: 1; min-width: 0; background: transparent; border: 0; outline: 0; font-size: 13px; color: var(--text); }
+  .search input::placeholder { color: var(--muted); opacity: 0.7; }
+  .search svg { width: 13px; height: 13px; }
+  .vr { width: 1px; height: 18px; background: var(--hair); margin: 0 6px; }
+  .me { width: 24px; height: 24px; margin-left: 6px; display: grid; place-items: center; border: 1px solid var(--border); font: 600 7.5px/1 var(--display); letter-spacing: 0.08em; color: var(--muted); transition: color 140ms, border-color 140ms; }
+  .me:hover { color: var(--text); border-color: var(--muted); }
+
+  /* ================= main row ================= */
+  .main { display: flex; min-height: 0; }
+  .pbar { width: 36px; flex: none; display: flex; flex-direction: column; background: var(--ink); border-right: 1px solid var(--hair); }
+  .pbtn { position: relative; height: 36px; display: grid; place-items: center; color: var(--muted); transition: color 140ms, background-color 140ms; }
+  .pbtn:hover { color: var(--text); background: var(--surface); }
+  .pbtn.on { color: var(--text); }
+  .pbtn::before { content: ""; position: absolute; left: 0; top: 9px; bottom: 9px; width: 2px; background: var(--accent); transform: scaleY(0); transition: transform 200ms var(--ease); }
+  .pbtn.on::before { transform: scaleY(1); }
+  .pbar .rule { height: 1px; margin: 6px 9px; background: var(--hair); }
+  .pbar .end { margin-top: auto; }
+
+  .panel { width: 272px; flex: none; display: flex; flex-direction: column; background: var(--surface); border-right: 1px solid var(--hair); min-height: 0; }
+  .panel.hidden { display: none; }
+  .phead { height: 34px; flex: none; display: flex; align-items: center; gap: 10px; padding: 0 6px 0 14px; border-bottom: 1px solid var(--hair); }
+  .phead .ml { color: var(--text); }
+  .phead .ro { color: var(--muted); font-size: 10.5px; }
+  .phead .sp { flex: 1; }
+  .phead .ib { width: 26px; height: 26px; }
+  .phead .ib svg { width: 14px; height: 14px; }
+  .filter { margin: 10px 10px 6px; height: 28px; display: flex; align-items: center; gap: 8px; padding: 0 9px; background: var(--ink); border: 1px solid var(--hair); border-radius: 2px; color: var(--muted); transition: border-color 160ms; }
+  .filter:hover { border-color: var(--border); }
+  .filter:focus-within { border-color: var(--accent); }
+  .filter input { flex: 1; min-width: 0; background: transparent; border: 0; outline: 0; font-size: 12.5px; color: var(--text); }
+  .filter input::placeholder { color: var(--muted); opacity: 0.7; }
+  .filter svg { width: 13px; height: 13px; }
+  .plist { flex: 1; overflow-y: auto; padding: 2px 0 12px; scrollbar-width: thin; scrollbar-color: var(--border) transparent; }
+  .row { position: relative; display: flex; align-items: center; gap: 9px; height: 28px; padding: 0 12px 0 14px; color: #c3c0bc; font-size: 12.5px; cursor: default; transition: background-color 120ms, color 120ms; }
+  .row:hover { background: var(--surface-alt); color: var(--text); }
+  .row.sel { background: var(--surface-alt); color: var(--text); }
+  .row.sel::before { content: ""; position: absolute; left: 0; top: 7px; bottom: 7px; width: 2px; background: var(--accent); }
+  .row .t { flex: 1; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .row .ro { color: var(--muted); font-size: 10px; }
+  .row.folder { color: var(--text); }
+  .row.folder .chev { width: 10px; height: 10px; transition: transform 180ms var(--ease); color: var(--muted); }
+  .row.folder.open .chev { transform: rotate(90deg); }
+  .row.child { padding-left: 33px; }
+  .row .fav { width: 13px; height: 13px; }
+  .row .host { display: none; font: 400 10px/1 var(--mono); color: var(--muted); max-width: 96px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .row.child:hover .host { display: block; }
+  .group { padding: 14px 14px 6px; display: flex; align-items: center; gap: 10px; }
+  .group::after { content: ""; flex: 1; height: 1px; background: var(--hair); }
+  .note-i { padding: 10px 14px 10px 14px; border-bottom: 1px solid var(--hair); cursor: default; position: relative; transition: background-color 120ms; }
+  .note-i:hover { background: var(--surface-alt); }
+  .note-i.sel { background: var(--surface-alt); }
+  .note-i.sel::before { content: ""; position: absolute; left: 0; top: 10px; bottom: 10px; width: 2px; background: var(--accent); }
+  .note-i b { display: flex; justify-content: space-between; gap: 8px; font-weight: 500; font-size: 12.5px; color: var(--text); margin-bottom: 4px; }
+  .note-i b .ro { color: var(--muted); font-size: 10px; }
+  .note-i p { font-size: 12px; line-height: 1.45; color: var(--muted); display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+  .dl { padding: 10px 14px; border-bottom: 1px solid var(--hair); }
+  .dl .top { display: flex; justify-content: space-between; gap: 10px; font-size: 12.5px; color: var(--text); margin-bottom: 7px; }
+  .dl .top span:first-child { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .dl .track { height: 2px; background: var(--surface-alt); }
+  .dl .track i { display: block; height: 100%; background: var(--accent); transition: width 300ms linear; }
+  .dl.done .track i { background: var(--border); }
+  .dl .meta { display: flex; justify-content: space-between; margin-top: 6px; }
+  .dl .meta .ro { font-size: 10px; color: var(--muted); }
+
+  .view { position: relative; flex: 1; min-width: 0; background: var(--bg); overflow: hidden; }
+  .scroll { position: absolute; inset: 0; overflow-y: auto; scrollbar-width: thin; scrollbar-color: var(--border) transparent; }
+
+  /* ================= status bar ================= */
+  .status { display: flex; align-items: stretch; background: var(--ink); border-top: 1px solid var(--hair); }
+  .status > * { display: flex; align-items: center; gap: 7px; padding: 0 10px; border-right: 1px solid var(--hair); white-space: nowrap; }
+  .status > .fill { flex: 1; min-width: 0; border-right: 1px solid var(--hair); font-size: 11.5px; color: var(--muted); overflow: hidden; text-overflow: ellipsis; }
+  .status > :last-child { border-right: 0; }
+  .status .sb { padding: 0 8px; color: var(--muted); transition: color 140ms, background-color 140ms; }
+  .status .sb:hover { color: var(--text); background: var(--surface); }
+  .status .sb svg { width: 13px; height: 13px; }
+  .status .ml { font-size: 8px; }
+  .status .ro { font-size: 10.5px; }
+  .status .sec svg { width: 11px; height: 11px; color: var(--muted); }
+  .status .sec.bad .ml, .status .sec.bad svg { color: var(--danger-text); }
+  .status .sec.bad { box-shadow: inset 0 2px 0 var(--danger); }
+  .mini { width: 44px; height: 2px; background: var(--surface-alt); }
+  .mini i { display: block; height: 100%; background: var(--accent); transition: width 160ms linear; }
+  .status .hide { display: none; }
+
+  /* ================= the fake web page (neutral, not themed by the browser) ================= */
+  .site { --s-bg: #f4f4f2; --s-fg: #1d1d1f; --s-muted: #67676c; --s-rule: #dcdcd7; --s-soft: #ebebe6; min-height: 100%; background: var(--s-bg); color: var(--s-fg); font-family: ui-sans-serif, system-ui, sans-serif; }
+  .darksite .site { --s-bg: #151517; --s-fg: #dcdcdc; --s-muted: #8b8b90; --s-rule: #2a2a2e; --s-soft: #1e1e21; }
+  .site a { color: inherit; text-decoration: underline; text-decoration-color: var(--s-muted); text-underline-offset: 3px; }
+  .site a:hover { text-decoration-color: currentColor; }
+  .s-top { height: 52px; display: flex; align-items: center; gap: 22px; padding: 0 32px; border-bottom: 1px solid var(--s-rule); font-size: 13.5px; }
+  .s-top b { font-weight: 650; margin-right: 10px; }
+  .s-top a { text-decoration: none; color: var(--s-muted); }
+  .s-top a:hover { color: var(--s-fg); }
+  .s-wrap { max-width: 860px; margin: 0 auto; padding: 34px 32px 64px; }
+  .crumb { font-size: 13px; color: var(--s-muted); margin-bottom: 8px; }
+  .site h1 { font-size: 28px; font-weight: 650; letter-spacing: -0.01em; margin-bottom: 10px; }
+  .site h2 { font-size: 19px; font-weight: 620; margin: 30px 0 10px; }
+  .site p { font-size: 15px; line-height: 1.65; margin-bottom: 12px; color: var(--s-fg); }
+  .site .lede { color: var(--s-muted); }
+  .files { border: 1px solid var(--s-rule); border-radius: 6px; margin: 22px 0 8px; font-size: 13.5px; }
+  .files div { display: flex; justify-content: space-between; gap: 16px; padding: 9px 14px; border-top: 1px solid var(--s-rule); }
+  .files div:first-child { border-top: 0; background: var(--s-soft); color: var(--s-muted); }
+  .files span:last-child { color: var(--s-muted); }
+  .site pre { background: var(--s-soft); border-radius: 6px; padding: 14px 16px; font: 13px/1.6 ui-monospace, monospace; overflow-x: auto; margin: 6px 0 14px; }
+  .site ul { margin: 0 0 12px 20px; font-size: 15px; line-height: 1.7; }
+  .skel { height: 12px; border-radius: 3px; background: var(--s-soft); margin: 12px 0; animation: pulse 1.4s ease-in-out infinite; }
+  @keyframes pulse { 50% { opacity: 0.55; } }
+  .mail-row { display: grid; grid-template-columns: 180px 1fr 70px; gap: 16px; padding: 12px 18px; border-bottom: 1px solid var(--s-rule); font-size: 14px; }
+  .mail-row.unread { font-weight: 600; }
+  .mail-row span:last-child { text-align: right; color: var(--s-muted); font-weight: 400; }
+  .mail-row span:nth-child(2) { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .player { border: 1px solid var(--s-rule); border-radius: 8px; padding: 22px; margin-top: 18px; }
+  .wave { display: flex; align-items: center; gap: 3px; height: 56px; margin: 18px 0; }
+  .wave i { flex: 1; background: var(--s-muted); border-radius: 1px; opacity: 0.6; }
+  .ptools { display: flex; align-items: center; gap: 14px; font-size: 13px; color: var(--s-muted); }
+  .ptools button { height: 32px; padding: 0 16px; border: 1px solid var(--s-rule); border-radius: 16px; color: var(--s-fg); cursor: pointer; }
+  .kv { width: 100%; border-collapse: collapse; font-size: 14px; margin-top: 16px; }
+  .kv td { padding: 9px 0; border-bottom: 1px solid var(--s-rule); }
+  .kv td:first-child { color: var(--s-muted); width: 40%; }
+
+  /* ================= start page / speed dial ================= */
+  .start { min-height: 100%; background: var(--bg); padding: 0 0 56px; }
+  .s-head { height: 44px; display: flex; align-items: stretch; border-bottom: 1px solid var(--hair); padding: 0 24px; }
+  .s-head .mark { display: flex; align-items: center; gap: 10px; flex: 1; }
+  .s-head .mark svg { width: 16px; height: 16px; color: var(--muted); }
+  .snav { display: flex; }
+  .snav button { position: relative; padding: 0 16px; font: 500 8.5px/1 var(--display); letter-spacing: 0.22em; color: var(--muted); transition: color 140ms; }
+  .snav button:hover { color: var(--text); }
+  .snav button.on { color: var(--text); }
+  .snav button.on::after { content: ""; position: absolute; left: 16px; right: 16px; bottom: -1px; height: 2px; background: var(--accent); }
+  .s-clock { flex: 1; display: flex; align-items: center; justify-content: flex-end; gap: 12px; }
+  .s-clock .ro { font-size: 12px; }
+  .s-body { width: 964px; margin: 0 auto; }
+  .s-search { margin: 64px auto 52px; width: 580px; height: 42px; display: flex; align-items: center; gap: 12px; padding: 0 14px; background: var(--ink); border: 1px solid var(--hair); border-radius: 2px; color: var(--muted); position: relative; transition: border-color 160ms; }
+  .s-search:hover { border-color: var(--border); }
+  .s-search:focus-within { border-color: var(--accent); }
+  .s-search input { flex: 1; background: transparent; border: 0; outline: 0; font-size: 15px; color: var(--text); }
+  .s-search input::placeholder { color: var(--muted); opacity: 0.65; }
+  .s-group { display: flex; align-items: center; gap: 12px; margin: 30px 0 12px; }
+  .s-group::after { content: ""; flex: 1; height: 1px; background: var(--hair); order: 1; }
+  .s-group .ro { order: 2; color: var(--muted); font-size: 10.5px; }
+  .grid { display: grid; grid-template-columns: repeat(6, 1fr); gap: 1px; background: var(--hair); border: 1px solid var(--hair); }
+  .tile { position: relative; height: 104px; background: var(--ink); padding: 10px 12px; display: flex; flex-direction: column; cursor: default; transition: background-color 140ms; }
+  .tile:hover { background: var(--surface); }
+  .tile .ix { font: 400 9.5px/1 var(--mono); color: var(--muted); opacity: 0.6; }
+  .tile .mono { flex: 1; display: grid; place-items: center; font: 600 22px/1 var(--display); letter-spacing: 0.06em; color: #6f6d72; transition: color 160ms; }
+  .tile:hover .mono { color: var(--text); }
+  .tile .nm { font-size: 12px; color: #c3c0bc; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .tile .hs { font: 400 9.5px/1.3 var(--mono); color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .tile::after { content: ""; position: absolute; left: 0; right: 0; bottom: 0; height: 2px; background: var(--accent); transform: scaleX(0); transform-origin: left; transition: transform 260ms var(--ease); }
+  .tile:hover::after { transform: scaleX(1); }
+  .tile.add { align-items: center; justify-content: center; gap: 10px; color: var(--muted); background: var(--bg); }
+  .tile.add:hover { color: var(--text); background: var(--surface); }
+
+  /* ================= theme-only preview: what the theme editor gives without CSS mods ================= */
+  .themeonly .tab { border-right-color: transparent; border-radius: 2px 2px 0 0; margin-top: 4px; }
+  .themeonly .tab.active { background: var(--surface); }
+  .themeonly .tab::after, .themeonly .tabcount, .themeonly .ml.mod, .themeonly .pct { display: none; }
+  .themeonly .fav { border: 0; background: var(--surface-alt); border-radius: 2px; }
+  .themeonly .tabbar { border-bottom: 0; }
+  .themeonly .url { background: #141317; border-color: transparent; }
+  .themeonly .badge { border-right: 0; padding-right: 0; }
+  .themeonly .pbtn::before { display: none; }
+  .themeonly .pbtn.on { background: var(--surface); }
+  .themeonly .phead .ml { font: 600 13px/1 var(--ui); letter-spacing: 0; text-transform: none; }
+  .themeonly .phead .ro, .themeonly .row .ro, .themeonly .status .ro { font-family: var(--ui); }
+  .themeonly .row.sel { background: var(--accent-dim); }
+  .themeonly .row.sel::before, .themeonly .group::after { display: none; }
+  .themeonly .status > * { border-right-color: transparent; }
+  .themeonly .status .sec.bad { box-shadow: none; }
+  .themeonly .nat { display: inline; font-size: 11.5px; }
+  .nat { display: none; }
+  .themeonly .s-head { border-bottom: 0; }
+  .themeonly .snav button { font: 500 13px/1 var(--ui); letter-spacing: 0; }
+  .themeonly .snav button.on::after { left: 12px; right: 12px; }
+  .themeonly .grid { background: transparent; border: 0; gap: 18px; }
+  .themeonly .tile { border-radius: 2px; background: var(--surface); padding: 0; }
+  .themeonly .tile .ix, .themeonly .tile .hs, .themeonly .tile::after { display: none; }
+  .themeonly .tile .mono { font-size: 0; background: var(--surface-alt); margin-bottom: 6px; }
+  .themeonly .tile .nm { text-align: center; padding: 0 0 8px; }
+  .themeonly .s-group::after { display: none; }
+
+  /* ================= spec panel ================= */
+  .spec { max-width: 1488px; margin: 0 auto; padding: 36px 24px 72px; display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.25fr); gap: 32px; }
+  .spec section { border-top: 1px solid var(--border); padding-top: 16px; }
+  .spec h2 { font: 600 9.5px/1 var(--display); letter-spacing: 0.28em; color: var(--text); margin-bottom: 14px; display: flex; justify-content: space-between; }
+  .spec h2 span { color: var(--muted); font-weight: 500; }
+  .spec h3 { font: 500 8.5px/1 var(--display); letter-spacing: 0.22em; color: var(--muted); margin: 22px 0 10px; }
+  .spec p, .spec li { font-size: 13px; line-height: 1.6; color: #c3c0bc; }
+  .spec ul { margin-left: 16px; }
+  .spec li { margin-bottom: 4px; }
+  .spec code { font: 400 11.5px var(--mono); color: var(--text); }
+  .spec table { width: 100%; border-collapse: collapse; font-size: 12.5px; }
+  .spec td { padding: 7px 0; border-bottom: 1px solid var(--hair); vertical-align: top; color: #c3c0bc; }
+  .spec td:first-child { color: var(--muted); width: 44%; }
+  .sw { display: inline-block; width: 10px; height: 10px; border: 1px solid var(--border); margin-right: 8px; vertical-align: -1px; }
+  .spec pre { background: var(--ink); border: 1px solid var(--hair); padding: 14px 16px; font: 400 11.5px/1.6 var(--mono); color: #c9c6c2; overflow-x: auto; white-space: pre; }
+  .spec pre .c { color: var(--muted); }
+  .spec pre .u { color: var(--danger-text); }
+  .flag { color: var(--danger-text); }
+  @media (max-width: 1100px) { .spec { grid-template-columns: 1fr; } }
+</style>
+</head>
+<body>
+
+<div class="bench">
+  <h1>COMMAND DECK <span>· VIVALDI 8.2 MOCK</span></h1>
+  <div class="grow"></div>
+  <div class="ctl"><span class="ml seg-l">VIEW</span><div class="seg" id="segView"><button data-v="page" aria-pressed="true">WEB PAGE</button><button data-v="start" aria-pressed="false">START PAGE</button></div></div>
+  <div class="ctl"><span class="ml seg-l">SIGNAL</span><div class="seg" id="segSig"><button data-v="steel" aria-pressed="true">STEEL BLUE</button><button data-v="graphite" aria-pressed="false">GRAPHITE</button></div></div>
+  <div class="ctl"><span class="ml seg-l">SITE</span><div class="seg" id="segSite"><button data-v="light" aria-pressed="true">LIGHT</button><button data-v="dark" aria-pressed="false">DARK</button></div></div>
+  <div class="ctl"><span class="ml seg-l">BUILD</span><div class="seg" id="segBuild"><button data-v="mods" aria-pressed="true">THEME + CSS</button><button data-v="theme" aria-pressed="false">THEME ONLY</button></div></div>
+  <p class="note">Click tabs, the speaker on the audio tab, the address field (Enter navigates), panel bar icons, bookmark folders, the zoom readout and the panel toggle at the bottom left. Hover links on the page to see them in the status bar. THEME ONLY approximates what the theme editor alone produces.</p>
+</div>
+
+<div class="stage"><div class="fit" id="fit">
+  <div class="win" id="win">
+    <div class="tabbar">
+      <button class="vmenu" title="Menu" aria-label="Menu"><svg class="i" viewBox="0 0 24 24"><circle cx="12" cy="12" r="8.6"/><path d="M3.4 12.6h17.2"/><circle cx="15.6" cy="8.4" r="2.2"/></svg></button>
+      <div class="strip" id="strip" role="tablist"></div>
+      <button class="newtab" id="newtab" title="New tab" aria-label="New tab"></button>
+      <div class="tabcount"><span class="ml mod">TABS</span><span class="ro" id="tabN">00</span></div>
+    </div>
+
+    <div class="addr">
+      <button class="ib" id="bBack" title="Back"></button>
+      <button class="ib" id="bFwd" title="Forward" disabled></button>
+      <button class="ib" id="bReload" title="Reload"></button>
+      <button class="ib" id="bHome" title="Home"></button>
+      <div class="url" id="url"></div>
+      <button class="ib star" id="bStar" title="Bookmark"></button>
+      <span class="vr"></span>
+      <label class="search"><span id="sIco"></span><input placeholder="Search" spellcheck="false"><span class="ml mod">WEB</span></label>
+      <button class="me" title="Profile">TK</button>
+    </div>
+
+    <div class="main">
+      <nav class="pbar" id="pbar"></nav>
+      <aside class="panel" id="panel">
+        <div class="phead" id="phead"></div>
+        <label class="filter"><span id="fIco"></span><input placeholder="Filter" spellcheck="false"></label>
+        <div class="plist" id="plist"></div>
+      </aside>
+      <div class="view" id="view"><div class="scroll" id="scroll"></div></div>
+    </div>
+
+    <div class="status" id="status">
+      <button class="sb" id="sbPanel" title="Toggle panel"></button>
+      <div class="sec" id="sbSec"></div>
+      <div class="fill" id="sbText">Ready</div>
+      <div id="sbLoad" class="hide"><span class="ml mod">LOADING</span><span class="ro" id="sbLoadN">0%</span><span class="mini"><i id="sbLoadBar"></i></span></div>
+      <div id="sbDl"><span class="ml mod">DL</span><span class="ro" id="sbDlN"></span></div>
+      <button class="sb" id="sbZoom" title="Page zoom, click to cycle"><span class="ml mod">ZOOM</span><span class="ro" id="sbZoomN">100%</span></button>
+      <div><span class="ro" id="sbClock">00:00</span></div>
+    </div>
+  </div>
+</div></div>
+
+<div class="spec">
+  <section>
+    <h2>THEME EDITOR <span>SETTINGS › THEMES › EDIT</span></h2>
+    <table>
+      <tr><td>Background</td><td><i class="sw" style="background:#0C0B0D"></i><code>#0C0B0D</code> surface: address bar, panels, menus</td></tr>
+      <tr><td>Foreground</td><td><i class="sw" style="background:#E8E6E3"></i><code>#E8E6E3</code> text</td></tr>
+      <tr><td>Highlight</td><td><i class="sw" style="background:#506A9B"></i><code>#506A9B</code> steel blue: focus, selection, active marks (GRAPHITE variant <code>#B9B6B2</code>)</td></tr>
+      <tr><td>Accent</td><td><i class="sw" style="background:#000000"></i><code>#000000</code> ink: tab bar and window frame, same black as the bar pills</td></tr>
+      <tr><td>Window background</td><td><i class="sw" style="background:#050505"></i><code>#050505</code> behind pages and the Start Page</td></tr>
+      <tr><td>Accent from active page</td><td>Off. Page colours never reach the chrome.</td></tr>
+      <tr><td>Accent on window</td><td>On, so the black accent paints the tab bar</td></tr>
+      <tr><td>Accent saturation limit</td><td>0 (inert while page accent is off; keeps it grey if someone turns it on)</td></tr>
+      <tr><td>Transparent tabs / tab bar, blur</td><td>Off, off, 0. No glass.</td></tr>
+      <tr><td>Corner rounding</td><td>2 px. 0 makes the native popups look unfinished; 2 still reads sharp.</td></tr>
+      <tr><td>Simple scrollbars</td><td>On</td></tr>
+      <tr><td>Background image</td><td>None</td></tr>
+    </table>
+
+    <h3>SETTINGS.JSON (EXPORT ZIP)</h3>
+<pre>{
+  "name": "TK-421 Command Deck",
+  "colorBg": "#0C0B0D",
+  "colorFg": "#E8E6E3",
+  "colorHighlightBg": "#506A9B",
+  "colorAccentBg": "#000000",
+  "colorWindowBg": "#050505",
+  "accentFromPage": false,
+  "accentOnWindow": true,
+  "accentSaturationLimit": 0,
+  "transparencyTabs": false,
+  "transparencyTabBar": false,
+  "blur": 0,
+  "radius": 2,
+  "simpleScrollbar": true,
+  "backgroundImage": ""
+}</pre>
+    <p><span class="flag">Unverified on 8.2.</span> Key names come from Vivaldi 6/7 theme exports (older exports nest them as <code>colors.baseBg</code> and friends). Export any built-in theme from 8.2 first, copy its bookkeeping keys (<code>id</code>, <code>version</code>, <code>engineVersion</code>, <code>alpha</code>, <code>contrast</code>…) and only replace the values above. Easier still: type the values into the editor, then export.</p>
+
+    <h3>OUTSIDE THE THEME</h3>
+    <ul>
+      <li>Status bar: show it, add the Clock and Page Zoom items in the toolbar editor; Vivaldi already prints load progress there, the mod only restyles it.</li>
+      <li>Tabs: close button on hover; tab bar on top; panel on the left, not floating.</li>
+      <li>Speed Dial monograms: no native option. Set a custom thumbnail per dial (monogram PNGs could be generated by a small script) or use the <code>::first-letter</code> trick in the CSS below.</li>
+    </ul>
+  </section>
+
+  <section>
+    <h2>CSS MODIFICATIONS <span>VIVALDI://EXPERIMENTS › ALLOW CSS MODIFICATIONS</span></h2>
+    <table>
+      <tr><td>Theme editor alone</td><td>All colours, black tab bar, near-sharp corners, no transparency or blur, simple scrollbars, steel focus ring. Toggle THEME ONLY above.</td></tr>
+      <tr><td>Needs CSS</td><td>Flat tab segments with hairlines and the underline (instead of a filled active tab), Geist / Orbitron / Monaspace in the chrome, micro-labels (TABS, SECURE, ZOOM…), status bar segment rules and mono readouts, hairline URL field, panel-bar rail, red NOT SECURE, the tactical Speed Dial grid.</td></tr>
+      <tr><td>Needs JS (skip)</td><td>Nothing essential. A live LOADING % chip would, but the native status text already shows progress.</td></tr>
+    </table>
+
+    <h3>SKETCH · <span class="flag">? = SELECTOR UNVERIFIED ON 8.2</span></h3>
+<pre><span class="c">/* tk421-command-deck.css, in the Custom UI Modifications folder */</span>
+#browser {
+  --tk-hair: rgba(255,255,255,.09);
+  --tk-label: 500 8.5px/1 "Orbitron", sans-serif;
+  --tk-mono: "Monaspace Neon", monospace;
+  font-family: "Geist", sans-serif;
+}
+
+<span class="c">/* tabs: flat segments, steel underline on the active one */</span>
+.tab-position .tab {
+  background: transparent !important; border-radius: 0;
+  box-shadow: none; border-right: 1px solid var(--tk-hair);
+}
+.tab-position .tab:hover { background: var(--colorBg) !important; }
+.tab-position .tab.active {
+  box-shadow: inset 0 -2px 0 var(--colorHighlightBg) !important;
+}
+.tab:not(.active) .title { color: #8E8B88; }
+.tab .favicon { filter: grayscale(1); }            <span class="u">/* ? optional */</span>
+
+<span class="c">/* tab count from CSS counters */</span>
+.tab-strip { counter-reset: tk-tabs; }              <span class="u">/* ? */</span>
+.tab-strip .tab-position { counter-increment: tk-tabs; }
+.tab-strip::after {
+  content: "TABS " counter(tk-tabs, decimal-leading-zero);
+  font: var(--tk-label); letter-spacing: .22em; color: #8E8B88;
+}                                                    <span class="u">/* ? may be clipped */</span>
+
+<span class="c">/* address field */</span>
+.UrlBar-AddressField {
+  background: #000; border: 1px solid var(--tk-hair); border-radius: 2px;
+}
+.UrlBar-AddressField:focus-within { border-color: var(--colorHighlightBg); }
+.SiteInfoButton.secure::after {                     <span class="u">/* ? class names */</span>
+  content: "SECURE"; font: var(--tk-label); letter-spacing: .22em;
+}
+.SiteInfoButton.insecure, .SiteInfoButton.warning { color: #D9808A; } <span class="u">/* ? */</span>
+
+<span class="c">/* panel bar and panels */</span>
+#switch { background: #000; border-right: 1px solid var(--tk-hair); } <span class="u">/* ? 7.x id */</span>
+#switch button.active { box-shadow: inset 2px 0 0 var(--colorHighlightBg); } <span class="u">/* ? */</span>
+.panel-group header h1 {                             <span class="u">/* ? */</span>
+  font: var(--tk-label); letter-spacing: .22em; text-transform: uppercase;
+}
+
+<span class="c">/* status bar: segments and mono readouts */</span>
+.toolbar-statusbar { font: 11px var(--tk-mono); background: #000; } <span class="u">/* ? */</span>
+.toolbar-statusbar > * + * { border-left: 1px solid var(--tk-hair); }
+
+<span class="c">/* speed dial: tactical grid of monogram tiles */</span>
+.startpage .dial {                                   <span class="u">/* ? */</span>
+  border-radius: 0; background: #000; box-shadow: inset 0 0 0 1px var(--tk-hair);
+}
+.startpage .dial:hover {
+  box-shadow: inset 0 0 0 1px #3F3E44, inset 0 -2px 0 var(--colorHighlightBg);
+}
+.startpage .dial .title::first-letter {             <span class="u">/* ? hack */</span>
+  font: 600 22px "Orbitron";
+}</pre>
+    <p>Class names are internal and changed across 6.x → 7.x; inspect the UI (<code>vivaldi://inspect/#apps</code>) on 8.2 before trusting any line marked <span class="flag">?</span>. Keep everything in one file so a broken selector only loses polish: the theme underneath stays coherent.</p>
+  </section>
+</div>
+
+<script>
+  const $ = (s) => document.querySelector(s);
+  const svg = (d, cls = "i") => `<svg class="${cls}" viewBox="0 0 24 24">${d}</svg>`;
+  const I = {
+    back: '<path d="M15 5l-7 7 7 7"/>', fwd: '<path d="M9 5l7 7-7 7"/>',
+    reload: '<path d="M19 12a7 7 0 1 1-2.05-4.95"/><path d="M19 4v4h-4"/>', x: '<path d="M6 6l12 12M18 6L6 18"/>',
+    home: '<path d="M4 11l8-7 8 7"/><path d="M6 10v10h12V10"/>',
+    star: '<path d="M12 4l2.4 5 5.6.6-4.2 3.8 1.2 5.6L12 16.2 7 19l1.2-5.6L4 9.6l5.6-.6z"/>',
+    lock: '<rect x="5" y="11" width="14" height="9"/><path d="M8 11V8a4 4 0 0 1 8 0v3"/>',
+    warn: '<path d="M12 4l9 16H3z"/><path d="M12 10v5M12 17.5v.5"/>',
+    bookmarks: '<path d="M6 4h12v16l-6-4-6 4z"/>', reading: '<path d="M4 6h16M4 11h16M4 16h10"/>',
+    downloads: '<path d="M12 4v11M7 10l5 5 5-5M5 20h14"/>', history: '<circle cx="12" cy="12" r="8"/><path d="M12 7v5l3 2"/>',
+    notes: '<path d="M6 4h9l3 3v13H6z"/><path d="M9 10h6M9 13h6M9 16h4"/>', window: '<rect x="4" y="5" width="16" height="14"/><path d="M4 9h16M10 9v10"/>',
+    settings: '<path d="M4 7h10M18 7h2M4 17h4M12 17h8"/><rect x="14" y="5" width="4" height="4"/><rect x="8" y="15" width="4" height="4"/>',
+    plus: '<path d="M12 5v14M5 12h14"/>', search: '<circle cx="11" cy="11" r="6"/><path d="M15.5 15.5L20 20"/>',
+    speaker: '<path d="M4 9h4l5-4v14l-5-4H4z"/><path d="M16 9a4 4 0 0 1 0 6"/>', mute: '<path d="M4 9h4l5-4v14l-5-4H4z"/><path d="M16 9l5 6M21 9l-5 6"/>',
+    side: '<rect x="4" y="5" width="16" height="14"/><path d="M9 5v14"/>', chev: '<path d="M9 6l6 6-6 6"/>',
+    deathstar: '<circle cx="12" cy="12" r="8.6"/><path d="M3.4 12.6h17.2"/><circle cx="15.6" cy="8.4" r="2.2"/>',
+    spin: '<path d="M12 4a8 8 0 0 1 8 8"/>',
+  };
+
+  // ---------- fake data (generic) ----------
+  const state = {
+    tabs: [
+      { mono: "M", title: "Inbox (3)", url: "https://mail.example.com/inbox", kind: "mail", pinned: true },
+      { mono: "Q", title: "quickshell-mirror/quickshell", url: "https://github.com/quickshell-mirror/quickshell", kind: "repo", starred: true },
+      { mono: "D", title: "Protocol design notes", url: "https://docs.example.org/wayland/protocol-design", kind: "loading", loading: true },
+      { mono: "R", title: "Night shift · ambient radio", url: "https://radio.example.net/live/night-shift", kind: "radio", audio: true },
+      { mono: "IP", title: "Router status", url: "http://192.168.0.1/status", kind: "router" },
+      { mono: "K", title: "Kernel release notes 6.18", url: "https://kernel-notes.example.org/6.18", kind: "notes" },
+    ],
+    active: 1, lastWeb: 1, panel: "bookmarks", panelOpen: true, muted: false,
+    progress: 12, zoom: 100, sel: "Quickshell", noteSel: 0,
+    dls: [{ n: "archlinux-2026.11.01-x86_64.iso", t: 1240, d: 471 }, { n: "wallpaper-pack-imperial.zip", t: 318, d: 210 }, { n: "manual-ba-key391.pdf", t: 4, d: 4 }],
+  };
+  const BOOKMARKS = [
+    { name: "Daily", open: true, items: [["Inbox", "mail.example.com", "M"], ["Calendar", "calendar.example.com", "C"], ["Night shift radio", "radio.example.net", "R"]] },
+    { name: "Shell", open: true, items: [["Quickshell", "github.com/quickshell-mirror", "Q"], ["QtQuick types", "doc.example.io/qtquick", "Qt"], ["Layer shell protocol", "wayland.example.org", "L"], ["Lua 5.4 manual", "lua.example.org/manual", "Lu"], ["Hyprland dispatchers", "wiki.example.org/dispatchers", "H"]] },
+    { name: "Reference", open: false, items: [["Colour contrast checker", "contrast.example.com", "Cc"], ["Font specimens", "type.example.com", "F"], ["Unicode tables", "unicode.example.org", "U"], ["Regex tester", "regex.example.dev", "Rx"]] },
+    { name: "Read later", open: false, items: [["On precise interfaces", "essays.example.net", "E"], ["Btrfs snapshot strategy", "blog.example.org", "B"], ["Notes on PipeWire", "audio.example.dev", "P"]] },
+  ];
+  const NOTES = [
+    { t: "Bar spacing", d: "11 NOV", b: "Capsules sit 28 px apart so the flares never touch. Re-check the toolbar after the tray change lands." },
+    { t: "Keyboard GIF", d: "09 NOV", b: "Max 30 frames, about nine seconds per frame. Try the slow scan animation next." },
+    { t: "Groceries", d: "08 NOV", b: "Coffee beans, oat milk, rice, lemons, batteries (AA)." },
+    { t: "Browser theme ideas", d: "06 NOV", b: "Flat tabs, steel underline, mono status readouts. No glass, no glow." },
+    { t: "Router", d: "02 NOV", b: "Firmware update pending. Admin page is plain HTTP, only use it on the LAN." },
+  ];
+  const HISTORY = [["14:02", "quickshell-mirror/quickshell", "Q"], ["13:48", "Protocol design notes", "D"], ["13:31", "Night shift · ambient radio", "R"], ["12:10", "Router status", "IP"], ["11:52", "Kernel release notes 6.18", "K"], ["10:05", "Inbox (3)", "M"], ["09:40", "Calendar", "C"], ["09:12", "Font specimens", "F"]];
+  const READING = [["On precise interfaces", "essays.example.net", "E"], ["Btrfs snapshot strategy", "blog.example.org", "B"], ["Notes on PipeWire", "audio.example.dev", "P"]];
+  const DIAL = [
+    { name: "Daily", tiles: [["Mail", "mail.example.com", "MA"], ["Calendar", "calendar.example.com", "CA"], ["Radio", "radio.example.net", "RA"], ["News", "news.example.org", "NW"], ["Weather", "weather.example.com", "WX"]] },
+    { name: "Workshop", tiles: [["Quickshell", "github.com/quickshell-mirror", "QS"], ["Wayland docs", "wayland.example.org", "WL"], ["Qt reference", "doc.example.io", "QT"], ["Lua manual", "lua.example.org", "LU"], ["Packages", "pkgs.example.org", "PK"], ["Forum", "forum.example.org", "FO"], ["Wiki", "wiki.example.org", "WK"], ["Mirror status", "mirrors.example.org", "MS"], ["Paste bin", "paste.example.dev", "PB"], ["Release notes", "kernel-notes.example.org", "RN"], ["Contrast", "contrast.example.com", "CC"]] },
+  ];
+  const PANELS = [["bookmarks", "Bookmarks"], ["reading", "Reading list"], ["downloads", "Downloads"], ["history", "History"], ["notes", "Notes"], ["window", "Window"]];
+
+  const tab = () => state.tabs[state.active];
+  const pad2 = (n) => String(n).padStart(2, "0");
+  const split = (u) => { const m = u.match(/^(\w+:\/\/)([^/]+)(.*)$/); return m ? { scheme: m[1], host: m[2], path: m[3] } : { scheme: "", host: u, path: "" }; };
+
+  // ---------- tabs ----------
+  function renderTabs() {
+    $("#strip").innerHTML = state.tabs.map((t, i) => {
+      const fav = t.loading ? `<span class="fav spin">${svg(I.spin, "")}</span>` : `<span class="fav">${t.mono}</span>`;
+      const aud = t.audio ? `<button class="aud" data-act="mute" title="${state.muted ? "Unmute" : "Mute"} tab">${state.muted ? svg(I.mute) : '<span class="eq"><i></i><i></i><i></i></span>'}</button>` : "";
+      const body = t.pinned ? fav : `${fav}<span class="ttl">${t.title}</span>${aud}${t.loading ? `<span class="ro pct" data-p>${state.progress}%</span>` : ""}<button class="x" data-act="close" title="Close tab">${svg(I.x)}</button>`;
+      return `<div class="tab${t.pinned ? " pinned" : ""}${i === state.active ? " active" : ""}" data-i="${i}" role="tab" aria-selected="${i === state.active}" title="${t.title}">${body}${t.loading ? `<i class="bar" data-pb style="width:${state.progress}%"></i>` : ""}</div>`;
+    }).join("");
+    $("#tabN").textContent = pad2(state.tabs.length);
+  }
+  $("#strip").addEventListener("click", (e) => {
+    const el = e.target.closest(".tab"); if (!el) return;
+    const i = +el.dataset.i, act = e.target.closest("[data-act]")?.dataset.act;
+    if (act === "mute") { state.muted = !state.muted; renderTabs(); return; }
+    if (act === "close") { closeTab(i); return; }
+    activate(i);
+  });
+  function activate(i) { state.active = i; if (state.tabs[i].kind !== "start") state.lastWeb = i; renderAll(); }
+  function closeTab(i) {
+    if (state.tabs.length === 1) return;
+    state.tabs.splice(i, 1);
+    if (state.active >= i) state.active = Math.max(0, state.active - 1);
+    if (state.lastWeb >= state.tabs.length || state.tabs[state.lastWeb].kind === "start") state.lastWeb = state.tabs.findIndex((t) => t.kind !== "start");
+    renderAll();
+  }
+  function newStart() {
+    let i = state.tabs.findIndex((t) => t.kind === "start");
+    if (i === -1) { state.tabs.push({ mono: "+", title: "Start Page", url: "", kind: "start" }); i = state.tabs.length - 1; }
+    activate(i);
+  }
+  $("#newtab").innerHTML = svg(I.plus);
+  $("#newtab").addEventListener("click", newStart);
+
+  // ---------- address bar ----------
+  [["#bBack", I.back], ["#bFwd", I.fwd], ["#bHome", I.home], ["#bStar", I.star]].forEach(([s, d]) => $(s).innerHTML = svg(d));
+  $("#sIco").outerHTML = svg(I.search); $("#fIco").outerHTML = svg(I.search);
+  function renderUrl() {
+    const t = tab(), u = split(t.url), secure = u.scheme === "https://";
+    const badge = t.kind === "start" ? `<span class="badge none"></span>`
+      : secure ? `<span class="badge" title="Connection is secure">${svg(I.lock)}<span class="ml mod">SECURE</span></span>`
+      : `<span class="badge bad" title="Connection is not secure">${svg(I.warn)}<span class="ml mod">NOT SECURE</span></span>`;
+    const text = t.kind === "start" ? `<span class="ph">Search or enter an address</span>`
+      : `${secure ? "" : `<span class="scheme">${u.scheme}</span>`}<span class="host">${u.host}</span><span class="path">${u.path}</span>`;
+    $("#url").innerHTML = `${badge}<span class="utext" id="utext">${text}</span>${t.loading ? `<i class="load" data-pb style="width:${state.progress}%"></i>` : ""}`;
+    $("#url").classList.remove("edit");
+    $("#bReload").innerHTML = svg(t.loading ? I.x : I.reload);
+    $("#bReload").title = t.loading ? "Stop" : "Reload";
+    $("#bStar").classList.toggle("on", !!t.starred);
+  }
+  $("#url").addEventListener("click", () => {
+    if ($("#url input")) return;
+    const t = tab(); $("#url").classList.add("edit");
+    $("#utext").outerHTML = `<input id="uin" value="${t.url}" spellcheck="false" placeholder="Search or enter an address">`;
+    const inp = $("#uin"); inp.focus(); inp.select();
+    inp.addEventListener("keydown", (e) => {
+      if (e.key === "Escape") renderUrl();
+      if (e.key === "Enter") {
+        let v = inp.value.trim(); if (!v) return renderUrl();
+        if (!/^\w+:\/\//.test(v)) v = "https://" + v;
+        Object.assign(t, { url: v, title: split(v).host, mono: split(v).host[0].toUpperCase(), kind: "generic", loading: false, starred: false });
+        state.lastWeb = state.active; renderAll();
+      }
+    });
+    inp.addEventListener("blur", () => setTimeout(() => { if ($("#uin")) renderUrl(); }, 0));
+  });
+  $("#bStar").addEventListener("click", () => { const t = tab(); if (t.kind !== "start") { t.starred = !t.starred; renderUrl(); } });
+  $("#bReload").addEventListener("click", () => {
+    const t = tab();
+    if (t.loading) { t.loading = false; t.kind = t.prev || "generic"; }
+    else if (t.kind !== "start") { t.prev = t.kind; t.loading = true; t.kind = "loading"; state.progress = 8; }
+    renderAll();
+  });
+  $("#bHome").addEventListener("click", newStart);
+  $("#bBack").addEventListener("click", () => { if (tab().kind === "start") activate(state.lastWeb); });
+
+  // ---------- panel bar + panel ----------
+  function renderPbar() {
+    const btn = ([id, label]) => `<button class="pbtn${state.panelOpen && state.panel === id ? " on" : ""}" data-panel="${id}" title="${label}">${svg(I[id])}</button>`;
+    $("#pbar").innerHTML = PANELS.slice(0, 5).map(btn).join("") + `<div class="rule"></div>` + btn(PANELS[5]) + `<button class="pbtn end" title="Settings">${svg(I.settings)}</button>`;
+  }
+  $("#pbar").addEventListener("click", (e) => {
+    const b = e.target.closest("[data-panel]"); if (!b) return;
+    if (state.panel === b.dataset.panel && state.panelOpen) state.panelOpen = false; else { state.panel = b.dataset.panel; state.panelOpen = true; }
+    renderPbar(); renderPanel();
+  });
+  const fav = (m) => `<span class="fav">${m}</span>`;
+  function renderPanel() {
+    $("#panel").classList.toggle("hidden", !state.panelOpen);
+    const label = PANELS.find((p) => p[0] === state.panel)[1];
+    let count = 0, html = "";
+    if (state.panel === "bookmarks") {
+      count = BOOKMARKS.reduce((n, f) => n + f.items.length, 0);
+      html = BOOKMARKS.map((f, fi) => `<div class="row folder${f.open ? " open" : ""}" data-f="${fi}">${svg(I.chev, "i chev")}<span class="t">${f.name}</span><span class="ro">${pad2(f.items.length)}</span></div>` +
+        (f.open ? f.items.map(([n, h, m]) => `<div class="row child${state.sel === n ? " sel" : ""}" data-b="${n}" title="${h}">${fav(m)}<span class="t">${n}</span><span class="host">${h}</span></div>`).join("") : "")).join("");
+    } else if (state.panel === "notes") {
+      count = NOTES.length;
+      html = NOTES.map((n, i) => `<div class="note-i${i === state.noteSel ? " sel" : ""}" data-n="${i}"><b><span>${n.t}</span><span class="ro">${n.d}</span></b><p>${n.b}</p></div>`).join("");
+    } else if (state.panel === "downloads") {
+      count = state.dls.length;
+      html = state.dls.map((d, i) => { const p = Math.round(d.d / d.t * 100); return `<div class="dl${p >= 100 ? " done" : ""}"><div class="top"><span>${d.n}</span></div><div class="track"><i data-dl="${i}" style="width:${p}%"></i></div><div class="meta"><span class="ro" data-dlm="${i}">${p >= 100 ? `${d.t} MB` : `${d.d} / ${d.t} MB`}</span><span class="ro" data-dlp="${i}">${p >= 100 ? "DONE" : p + "%"}</span></div></div>`; }).join("");
+    } else if (state.panel === "history") {
+      count = HISTORY.length;
+      html = `<div class="group"><span class="ml">TODAY</span></div>` + HISTORY.map(([t, n, m]) => `<div class="row">${fav(m)}<span class="t">${n}</span><span class="ro">${t}</span></div>`).join("");
+    } else if (state.panel === "reading") {
+      count = READING.length;
+      html = READING.map(([n, h, m]) => `<div class="row child" style="padding-left:14px" title="${h}">${fav(m)}<span class="t">${n}</span><span class="host">${h}</span></div>`).join("");
+    } else {
+      count = state.tabs.length;
+      html = `<div class="group"><span class="ml">WINDOW 01</span></div>` + state.tabs.map((t, i) => `<div class="row${i === state.active ? " sel" : ""}" data-t="${i}">${fav(t.mono)}<span class="t">${t.title}</span>${t.pinned ? '<span class="ml">PIN</span>' : ""}</div>`).join("");
+    }
+    $("#phead").innerHTML = `<span class="ml">${label}</span><span class="ro">${String(count).padStart(3, "0")}</span><span class="sp"></span><button class="ib" title="New">${svg(I.plus)}</button>`;
+    $("#plist").innerHTML = html;
+  }
+  $("#plist").addEventListener("click", (e) => {
+    const f = e.target.closest("[data-f]"), b = e.target.closest("[data-b]"), n = e.target.closest("[data-n]"), t = e.target.closest("[data-t]");
+    if (f) BOOKMARKS[+f.dataset.f].open = !BOOKMARKS[+f.dataset.f].open;
+    if (b) state.sel = b.dataset.b;
+    if (n) state.noteSel = +n.dataset.n;
+    if (t) return activate(+t.dataset.t);
+    renderPanel();
+  });
+
+  // ---------- page content (a neutral fake site, not themed) ----------
+  const L = (txt, href) => `<a href="#" data-href="${href}">${txt}</a>`;
+  function sitePage(t) {
+    const u = split(t.url);
+    const top = (name, links) => `<div class="s-top"><b>${name}</b>${links.map(([a, h]) => L(a, h)).join("")}</div>`;
+    switch (t.kind) {
+      case "repo": return top("Mirror", [["Overview", u.host + u.path], ["Files", u.host + u.path + "/tree/master"], ["Releases", u.host + u.path + "/releases"]]) + `<div class="s-wrap">
+        <div class="crumb">${L("quickshell-mirror", u.host + "/quickshell-mirror")} / quickshell</div>
+        <h1>quickshell</h1><p class="lede">Read-only mirror. A toolkit for building desktop shells with QtQuick. QML, C++.</p>
+        <div class="files"><div><span>master · 1,284 commits</span><span>updated 2 days ago</span></div>
+          <div><span>${L("src/", u.host + u.path + "/tree/master/src")}</span><span>wayland: track layer surface scale</span></div>
+          <div><span>${L("docs/", u.host + u.path + "/tree/master/docs")}</span><span>docs: session lock example</span></div>
+          <div><span>${L("examples/", u.host + u.path + "/tree/master/examples")}</span><span>examples: bar with tray</span></div>
+          <div><span>${L("CMakeLists.txt", u.host + u.path + "/blob/master/CMakeLists.txt")}</span><span>build: bump minimum Qt</span></div></div>
+        <h2>Getting started</h2><p>Write a <code>shell.qml</code>, then point the runtime at it. Every save reloads the shell, so keep each file in a working state when you save it.</p>
+        <pre>qs -p ~/.config/quickshell/shell.qml\nqs log -p ~/.config/quickshell/shell.qml</pre>
+        <p>Panels, popups and lock surfaces are ordinary QML items. See ${L("the documentation", "quickshell.example.org/docs")} for the type reference and ${L("the examples folder", u.host + u.path + "/tree/master/examples")} for complete shells.</p>
+        <h2>Building</h2><ul><li>Qt 6.6 or newer, with Wayland and ShaderTools</li><li>CMake and Ninja</li><li>Optional: PipeWire, PAM, Hyprland IPC</li></ul></div>`;
+      case "loading": return top("Docs", [["Guide", u.host + "/guide"], ["Reference", u.host + "/reference"]]) + `<div class="s-wrap"><div class="crumb">Wayland / Protocols</div><h1>Protocol design notes</h1>
+        <p class="lede">Loading the rest of this page…</p>${[92, 88, 95, 60, 0, 90, 84, 70].map((w) => w ? `<div class="skel" style="width:${w}%"></div>` : "<br>").join("")}</div>`;
+      case "radio": return top("Radio", [["Live", u.host + "/live"], ["Schedule", u.host + "/schedule"], ["Archive", u.host + "/archive"]]) + `<div class="s-wrap"><div class="crumb">Live · 128 kbps</div><h1>Night shift</h1>
+        <p class="lede">Slow ambient and drone for the late hours. Hosted by the overnight crew.</p>
+        <div class="player"><b>Now playing</b><p style="margin:4px 0 0">Low orbit, part two</p>
+        <div class="wave">${Array.from({ length: 64 }, (_, i) => `<i style="height:${20 + Math.round(Math.abs(Math.sin(i * 0.47) * Math.cos(i * 0.13)) * 80)}%"></i>`).join("")}</div>
+        <div class="ptools"><button>${state.muted ? "Muted" : "Pause"}</button><span>42:18 elapsed</span><span>·</span>${L("Tracklist", u.host + "/live/night-shift/tracks")}</div></div></div>`;
+      case "router": return `<div class="s-top"><b>Router</b><span style="color:var(--s-muted)">Admin console</span></div><div class="s-wrap"><h1>Status</h1><p class="lede">Firmware 4.2.1 · update available. ${L("Update now", "192.168.0.1/firmware")}</p>
+        <table class="kv"><tr><td>Internet</td><td>Connected</td></tr><tr><td>WAN address</td><td>203.0.113.24</td></tr><tr><td>LAN clients</td><td>7</td></tr><tr><td>Uptime</td><td>18 days, 4 hours</td></tr><tr><td>Wireless</td><td>Disabled</td></tr></table></div>`;
+      case "mail": return top("Mail", [["Inbox", u.host + "/inbox"], ["Sent", u.host + "/sent"], ["Archive", u.host + "/archive"]]) + `<div>${[
+        [1, "Build service", "Nightly build finished: 0 failures", "14:02"], [1, "Calendar", "Reminder: dentist, Thursday 09:30", "13:15"], [1, "Package watch", "3 updates for packages you follow", "11:48"],
+        [0, "Alex M.", "Re: weekend ride, route attached", "Tue"], [0, "Store", "Your order has shipped", "Mon"], [0, "Forum digest", "New replies in threads you follow", "Sun"]].map(([u2, f, s, d]) => `<div class="mail-row${u2 ? " unread" : ""}"><span>${f}</span><span>${L(s, "mail.example.com/m/" + d.toLowerCase())}</span><span>${d}</span></div>`).join("")}</div>`;
+      case "notes": return top("Kernel notes", [["Releases", u.host + "/releases"], ["Archive", u.host + "/archive"]]) + `<div class="s-wrap"><div class="crumb">Releases / 6.18</div><h1>Release notes 6.18</h1>
+        <p class="lede">A summary of the changes most likely to matter on a desktop machine.</p><h2>Graphics</h2>
+        <ul><li>AMD display: fixes for variable refresh on high-refresh panels</li><li>Lower idle power on recent discrete GPUs</li></ul><h2>Filesystems</h2>
+        <ul><li>Btrfs: faster snapshot deletion and fewer stalls under heavy writes</li><li>Better error reporting for removable media</li></ul>
+        <p>Full changelog: ${L("6.17 to 6.18", u.host + "/6.18/changelog")}. Previous release: ${L("6.17", u.host + "/6.17")}.</p></div>`;
+      default: return `<div class="s-wrap"><h1>${u.host}</h1><p class="lede">This mock has no content for this address.</p></div>`;
+    }
+  }
+  function startPage() {
+    let ix = 0;
+    return `<div class="start"><div class="s-head"><div class="mark">${svg(I.deathstar)}<span class="ml mod">TK-421</span></div>
+      <div class="snav"><button class="on"><span class="mod">SPEED DIAL</span></button><button>BOOKMARKS</button><button>HISTORY</button><button>NOTES</button></div>
+      <div class="s-clock"><span class="ml mod" id="spDate"></span><span class="ro" id="spClock"></span></div></div>
+      <div class="s-body"><label class="s-search">${svg(I.search)}<input placeholder="Search the web" spellcheck="false"><span class="ml mod">WEB</span></label>
+      ${DIAL.map((g) => `<div class="s-group"><span class="ml">${g.name}</span><span class="ro">${pad2(g.tiles.length)}</span></div><div class="grid">
+        ${g.tiles.map(([n, h, m]) => `<div class="tile" tabindex="0" data-href="${h}"><span class="ix">${pad2(++ix)}</span><span class="mono">${m}</span><span class="nm">${n}</span><span class="hs">${h}</span></div>`).join("")}
+        <div class="tile add" tabindex="0">${svg(I.plus)}<span class="ml">ADD</span></div></div>`).join("")}</div></div>`;
+  }
+  function renderView() {
+    const t = tab();
+    $("#scroll").innerHTML = t.kind === "start" ? startPage() : `<div class="site" style="zoom:${state.zoom / 100}">${sitePage(t)}</div>`;
+    $("#scroll").scrollTop = 0;
+    tickClock();
+  }
+  $("#view").addEventListener("click", (e) => { if (e.target.closest("a")) e.preventDefault(); });
+  $("#view").addEventListener("mouseover", (e) => { const a = e.target.closest("[data-href]"); if (a) $("#sbText").textContent = "https://" + a.dataset.href; });
+  $("#view").addEventListener("mouseout", (e) => { if (e.target.closest("[data-href]")) statusText(); });
+
+  // ---------- status bar ----------
+  $("#sbPanel").innerHTML = svg(I.side);
+  $("#sbPanel").addEventListener("click", () => { state.panelOpen = !state.panelOpen; renderPbar(); renderPanel(); });
+  $("#sbZoom").addEventListener("click", () => { const z = [80, 90, 100, 110, 125, 150]; state.zoom = z[(z.indexOf(state.zoom) + 1) % z.length]; $("#sbZoomN").textContent = state.zoom + "%"; renderView(); });
+  function statusText() {
+    const t = tab();
+    $("#sbText").textContent = t.kind === "start" ? "Start Page" : t.loading ? `Loading ${Math.round(state.progress * 0.59)} of 59 elements · ${Math.round(state.progress * 8.4)} kB` : "Ready";
+  }
+  function renderStatus() {
+    const t = tab(), secure = t.url.startsWith("https://");
+    const sec = $("#sbSec");
+    sec.className = "sec" + (t.kind === "start" ? " hide" : secure ? "" : " bad");
+    sec.innerHTML = secure ? `${svg(I.lock)}<span class="ml mod">SECURE</span><span class="nat">Secure</span>` : `${svg(I.warn)}<span class="ml mod">NOT SECURE</span><span class="nat">Not secure</span>`;
+    $("#sbLoad").classList.toggle("hide", !t.loading);
+    statusText(); tickDl();
+  }
+  function tickDl() {
+    const act = state.dls.filter((d) => d.d < d.t);
+    const p = act.length ? Math.round(act.reduce((s, d) => s + d.d, 0) / act.reduce((s, d) => s + d.t, 0) * 100) : 100;
+    $("#sbDlN").textContent = act.length ? `${act.length} · ${p}%` : "IDLE";
+  }
+  function tickClock() {
+    const d = new Date(), hm = `${pad2(d.getHours())}:${pad2(d.getMinutes())}`;
+    $("#sbClock").textContent = hm;
+    const c = $("#spClock"); if (c) { c.textContent = `${hm}:${pad2(d.getSeconds())}`; $("#spDate").textContent = d.toLocaleDateString("en-GB", { weekday: "short", day: "2-digit", month: "short" }).replace(",", "").toUpperCase(); }
+  }
+
+  // ---------- live ticks ----------
+  setInterval(() => {   // page load: crawl to 100, hold, restart (a mock that never settles)
+    if (state.progress >= 100) {   // a reload the user started finishes; the demo tab keeps looping
+      const done = state.tabs.filter((t) => t.loading && t.prev);
+      if (done.length) { done.forEach((t) => { t.loading = false; t.kind = t.prev; delete t.prev; }); renderAll(); }
+    }
+    state.progress = state.progress >= 100 ? 8 : Math.min(100, state.progress + (state.progress < 60 ? 3 : 1));
+    document.querySelectorAll("[data-p]").forEach((el) => el.textContent = state.progress + "%");
+    document.querySelectorAll("[data-pb]").forEach((el) => el.style.width = state.progress + "%");
+    $("#sbLoadN").textContent = state.progress + "%"; $("#sbLoadBar").style.width = state.progress + "%";
+    if (tab().loading && !$("#sbText").dataset.hover) statusText();
+  }, 180);
+  setInterval(() => {   // downloads
+    state.dls.forEach((d, i) => {
+      if (d.d >= d.t) return;
+      d.d = Math.min(d.t, d.d + (i === 0 ? 7 : 3));
+      const p = Math.round(d.d / d.t * 100), bar = document.querySelector(`[data-dl="${i}"]`);
+      if (bar) { bar.style.width = p + "%"; document.querySelector(`[data-dlp="${i}"]`).textContent = p >= 100 ? "DONE" : p + "%"; document.querySelector(`[data-dlm="${i}"]`).textContent = `${d.d} / ${d.t} MB`; }
+    });
+    state.dls.forEach((d, i) => { if (d.d >= d.t && i < 2 && Math.random() < 0.02) d.d = 0; });
+    tickDl();
+  }, 600);
+  setInterval(tickClock, 1000);
+  // keep hovered link text from being overwritten by the loading text
+  $("#view").addEventListener("mouseover", (e) => { $("#sbText").dataset.hover = e.target.closest("[data-href]") ? "1" : ""; });
+
+  // ---------- bench ----------
+  function seg(id, fn) {
+    const el = $(id);
+    el.addEventListener("click", (e) => {
+      const b = e.target.closest("button"); if (!b) return;
+      el.querySelectorAll("button").forEach((x) => x.setAttribute("aria-pressed", x === b));
+      fn(b.dataset.v);
+    });
+  }
+  seg("#segView", (v) => v === "start" ? newStart() : activate(state.lastWeb));
+  seg("#segSig", (v) => document.body.classList.toggle("graphite", v === "graphite"));
+  seg("#segSite", (v) => document.body.classList.toggle("darksite", v === "dark"));
+  seg("#segBuild", (v) => $("#win").classList.toggle("themeonly", v === "theme"));
+  function syncViewSeg() { const s = tab().kind === "start"; document.querySelectorAll("#segView button").forEach((b) => b.setAttribute("aria-pressed", (b.dataset.v === "start") === s)); }
+
+  function renderAll() { renderTabs(); renderUrl(); renderPbar(); renderPanel(); renderView(); renderStatus(); syncViewSeg(); }
+
+  // scale the 1440 x 900 window to the available width
+  function fit() {
+    const w = $("#fit").clientWidth, s = Math.min(1, w / 1440);
+    $("#win").style.transform = `scale(${s})`; $("#fit").style.height = 900 * s + "px";
+  }
+  addEventListener("resize", fit);
+  renderAll(); fit();
+</script>
+</body>
+</html>

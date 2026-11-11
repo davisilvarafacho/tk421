@@ -1,0 +1,50 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Vivaldi Directions</title>
+<style>
+  :root {
+    --ink: #000000; --surface: #0C0B0D; --raise: #1A1A21; --text: #E8E6E3; --muted: #8E8B88;
+    --hairline: rgba(255, 255, 255, 0.09);
+    --ui: "Geist", ui-sans-serif, system-ui, sans-serif; --display: "Orbitron", "Geist", sans-serif;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; height: 100%; background: #16161a; color: var(--text); font: 13px/1.45 var(--ui); }
+  body { display: grid; grid-template-rows: auto 1fr; }
+  header { display: flex; align-items: center; gap: 18px; padding: 10px 16px; flex-wrap: wrap; }
+  h1 { margin: 0; font: 600 13px var(--display); letter-spacing: 0.22em; color: var(--muted); }
+  nav { display: inline-flex; gap: 2px; padding: 3px; background: var(--ink); border: 1px solid var(--hairline); border-radius: 15px; }
+  nav button { all: unset; cursor: pointer; padding: 5px 14px; border-radius: 12px; font: 600 11px var(--display); letter-spacing: 0.14em; color: var(--muted); transition: background 140ms, color 140ms; }
+  nav button:hover { color: var(--text); }
+  nav button[aria-selected="true"] { background: var(--raise); color: var(--text); }
+  nav button:focus-visible { outline: 1px solid #B9B6B2; outline-offset: 2px; }
+  .blurb { color: var(--muted); flex: 1; min-width: 260px; }
+  iframe { width: 100%; height: 100%; border: 0; display: block; background: #2b2d31; }
+</style>
+</head>
+<body>
+<header>
+  <h1>VIVALDI · 3 DIRECTIONS</h1>
+  <nav role="tablist" aria-label="Direction">
+    <button role="tab" data-src="bridge.html" data-blurb="The browser continues the shell bar: black floating pills with the hairline, a centred address pill like the island, steel only for the active state. Needs CSS mods for the shapes.">BRIDGE</button>
+    <button role="tab" data-src="command-deck.html" data-blurb="An Imperial bridge console: near-sharp corners, flat tabs with a steel underline, Orbitron micro-labels and mono readouts in the status bar. Needs CSS mods.">COMMAND DECK</button>
+    <button role="tab" data-src="graphite.html" data-blurb="Theme editor only: the terminal and launcher greys, no hue, nothing that can break on an update. One settings.json the Theme Engine can generate.">GRAPHITE</button>
+  </nav>
+  <span class="blurb" id="blurb"></span>
+</header>
+<iframe id="view" title="Direction mock"></iframe>
+<script>
+  const tabs = [...document.querySelectorAll("nav button")], view = document.getElementById("view"), blurb = document.getElementById("blurb");
+  function pick(b) {
+    tabs.forEach(t => t.setAttribute("aria-selected", t === b));
+    view.src = b.dataset.src; blurb.textContent = b.dataset.blurb;
+    try { localStorage.setItem("vivaldi-direction", b.dataset.src); } catch (e) {}
+  }
+  tabs.forEach(b => b.addEventListener("click", () => pick(b)));
+  let saved = null; try { saved = localStorage.getItem("vivaldi-direction"); } catch (e) {}
+  pick(tabs.find(t => t.dataset.src === saved) || tabs[0]);
+</script>
+</body>
+</html>
