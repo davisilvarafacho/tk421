@@ -9,3 +9,7 @@ wallpaper/state.json
 
 # Vivaldi theme zip, built by vivaldi/build-theme.lua
 vivaldi/dist/
+
+# Tool caches with session data (they hold chat prompts): local only
+.trail/cache/
+graft/.cache/
