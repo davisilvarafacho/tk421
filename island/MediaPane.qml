@@ -1,50 +1,61 @@
 import QtQuick
 
+import "../components"
 import "../services"
 import "../theme"
 
 // Media tab of the island card: art, title, artist, progress and transport controls of the active player.
-// Prototype: prototypes/island-media-tab/index.html
 Item {
     id: root
 
     readonly property var c: Theme.imperial
 
-    implicitWidth: 692
-    implicitHeight: 300
+    implicitWidth: 764
+    implicitHeight: 318
 
     function fmt(seconds) {
         const s = Math.max(0, Math.floor(seconds))
         return Math.floor(s / 60) + ":" + String(s % 60).padStart(2, "0")
     }
 
-    component Transport: Rectangle {
+    // A round transport button. The item is as wide as its disc and 60 px tall, so a Row spaces the discs evenly
+    // and every disc sits on the same centre line.
+    component Transport: Item {
+        id: button
+
         property string glyph
         property bool primary: false
         signal clicked()
 
-        width: primary ? 52 : 40
-        height: 40
-        radius: 8
-        color: primary ? root.c.text : "transparent"
-        border.width: 1
-        border.color: primary ? root.c.text : (area.containsMouse ? root.c.accent : root.c.border)
+        width: primary ? 60 : 46
+        height: 60
 
-        Text {
-            renderType: Text.CurveRendering
-            anchors.centerIn: parent
-            text: parent.glyph
-            color: parent.primary ? root.c.bg : root.c.text
-            font.family: Theme.iconFont
-            font.pixelSize: 18
-        }
+        Rectangle {
+            anchors.verticalCenter: parent.verticalCenter
+            width: button.width
+            height: width
+            radius: width / 2
+            color: button.primary ? (area.containsMouse ? "#FFFFFF" : root.c.text)
+                                  : (area.containsMouse ? Qt.rgba(1, 1, 1, 0.14) : Qt.rgba(1, 1, 1, 0.07))
+            scale: area.pressed ? 0.94 : 1
 
-        MouseArea {
-            id: area
-            anchors.fill: parent
-            hoverEnabled: true
-            cursorShape: Qt.PointingHandCursor
-            onClicked: parent.clicked()
+            Behavior on color { ColorAnimation { duration: 120 } }
+            Behavior on scale { NumberAnimation { duration: 90 } }
+
+            Icon {
+                anchors.centerIn: parent
+                name: button.glyph
+                size: button.primary ? 26 : 20
+                color: button.primary ? "#000000" : root.c.text
+            }
+
+            MouseArea {
+                id: area
+                anchors.fill: parent
+                hoverEnabled: true
+                cursorShape: Qt.PointingHandCursor
+                onClicked: button.clicked()
+            }
         }
     }
 
@@ -55,13 +66,11 @@ Item {
         Rectangle {
             id: art
 
-            y: 32
-            width: 236
-            height: 236
-            radius: 12
+            y: 15
+            width: 288
+            height: 288
+            radius: 20
             color: root.c.surfaceAlt
-            border.width: 1
-            border.color: root.c.border
             clip: true
             opacity: Media.playing ? 1 : 0.55      // paused reads as paused
 
@@ -109,40 +118,41 @@ Item {
                     wrapMode: Text.Wrap
                     maximumLineCount: 2
                     elide: Text.ElideRight
-                    font.family: Theme.fontFamily
-                    font.pixelSize: 22
-                    font.weight: Font.DemiBold
+                    font.family: Theme.displayFont
+                    font.pixelSize: 20
+                    font.weight: Font.Medium
+                    font.letterSpacing: 0.6
                 }
 
                 Text {
                     renderType: Text.CurveRendering
                     width: parent.width
-                    text: Media.artist + (Media.source ? " · " + Media.source : "")
+                    text: Media.artist + (Media.source ? "  ·  " + Media.source : "")
                     textFormat: Text.PlainText
                     color: root.c.muted
                     elide: Text.ElideRight
                     font.family: Theme.fontFamily
-                    font.pixelSize: 14
+                    font.pixelSize: 15
                 }
             }
 
             // Progress and controls hang from the bottom edge, level with the art.
             Column {
-                id: bottom
-
                 anchors.bottom: parent.bottom
                 width: parent.width
                 spacing: 8
 
                 Rectangle {
                     width: parent.width
-                    height: 3
-                    color: root.c.border
+                    height: 4
+                    radius: 2
+                    color: Qt.rgba(1, 1, 1, 0.14)
 
                     Rectangle {
                         height: parent.height
+                        radius: 2
                         width: Media.length > 0 ? parent.width * Math.min(1, Media.position / Media.length) : 0
-                        color: root.c.accent
+                        color: root.c.text
                     }
                 }
 
@@ -169,39 +179,44 @@ Item {
                     }
                 }
 
-                Item { width: 1; height: 10 }
+                Item { width: 1; height: 8 }
 
-                Row {
-                    spacing: 8
+                // Centred under the progress bar: the Row sits in a plain Item, so it can be centred with anchors.
+                Item {
+                    width: parent.width
+                    height: 60
 
-                    Transport { glyph: "󰒮"; onClicked: Media.previous() }
-                    Transport { glyph: Media.playing ? "󰏤" : "󰐊"; primary: true; onClicked: Media.toggle() }
-                    Transport { glyph: "󰒭"; onClicked: Media.next() }
+                    Row {
+                        anchors.horizontalCenter: parent.horizontalCenter
+                        spacing: 14
+
+                        Transport { glyph: "skip_previous"; onClicked: Media.previous() }
+                        Transport { glyph: Media.playing ? "pause" : "play_arrow"; primary: true; onClicked: Media.toggle() }
+                        Transport { glyph: "skip_next"; onClicked: Media.next() }
+                    }
                 }
             }
         }
     }
 
-    // Empty state: dimmed icon and label, centred (same as the agenda's).
+    // Empty state: dimmed icon and label, centred (same as the calendar's).
     Column {
         anchors.centerIn: parent
         visible: !Media.present
         spacing: 10
         opacity: 0.45
 
-        Text {
-            renderType: Text.CurveRendering
+        Icon {
             anchors.horizontalCenter: parent.horizontalCenter
-            text: "󰎆"
+            name: "music_note"
+            size: 34
             color: root.c.muted
-            font.family: Theme.iconFont
-            font.pixelSize: 34
         }
 
         Text {
             renderType: Text.CurveRendering
             anchors.horizontalCenter: parent.horizontalCenter
-            text: "no media..."
+            text: "Nothing playing"
             color: root.c.muted
             font.family: Theme.fontFamily
             font.pixelSize: 13
