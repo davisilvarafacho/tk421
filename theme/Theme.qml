@@ -10,6 +10,10 @@ QtObject {
     readonly property color muted: "#858B95"
     readonly property string fontFamily: "Geist"
     readonly property string iconFont: "Symbols Nerd Font Mono"
+    // The shell process may predate the font install (Qt reads the font list at start): FontLoader registers the file at runtime.
+    readonly property FontLoader symbolsLoader: FontLoader { source: "file:///usr/share/fonts/TTF/MaterialSymbolsSharp%5BFILL,GRAD,opsz,wght%5D.ttf" }
+    readonly property string symbolsFont: symbolsLoader.status === FontLoader.Ready ? symbolsLoader.font.family : "Material Symbols Sharp"
+    readonly property var iconSize: ({ bar: 16, panel: 16, hero: 24 })
     readonly property string displayFont: "Orbitron"
     readonly property string monoFont: "Monaspace Neon"
 
