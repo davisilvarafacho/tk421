@@ -77,6 +77,40 @@ TestCase {
         compare(Sound.deviceSub("Whatever", undefined), "")
     }
 
+    function test_parsePorts_keeps_available_ports_only() {
+        const text = JSON.stringify([
+            { name: "alsa_output.analog", active_port: "analog-output-lineout", ports: [
+                { name: "analog-output-lineout", description: "Line Out", type: "Line", availability: "available" },
+                { name: "analog-output-headphones", description: "Headphones", type: "Headphones", availability: "available" },
+                { name: "analog-output-speaker", description: "Speakers", type: "Speaker", availability: "not available" }
+            ] },
+            { name: "alsa_output.hdmi", active_port: "hdmi-output-3", ports: [
+                { name: "hdmi-output-3", description: "HDMI / DisplayPort 4", type: "HDMI", availability: "availability unknown" }
+            ] }
+        ])
+        const r = Sound.parsePorts(text)
+        compare(r["alsa_output.analog"].active, "analog-output-lineout")
+        compare(r["alsa_output.analog"].ports.map(p => p.name), ["analog-output-lineout", "analog-output-headphones"])
+        compare(r["alsa_output.analog"].ports[1].label, "Headphones")
+        compare(r["alsa_output.hdmi"].ports.length, 1)
+    }
+
+    function test_parsePorts_survives_bad_input() {
+        compare(Sound.parsePorts(""), {})
+        compare(Sound.parsePorts("not json"), {})
+        compare(Sound.parsePorts("{}"), {})
+        compare(Sound.parsePorts("[null, {\"name\": 3}]"), {})
+        compare(Sound.parsePorts("[{\"name\": \"x\"}]")["x"].ports, [])
+    }
+
+    function test_portProps_marks_headphone_ports() {
+        const props = Sound.portProps({ type: "Headphones" }, { "device.bus": "pci" })
+        compare(props["device.form-factor"], "headphone")
+        compare(props["device.bus"], "pci")
+        compare(Sound.portProps({ type: "Line" }, { "device.bus": "pci" })["device.form-factor"], undefined)
+        compare(Sound.deviceGlyph("Headphones", props, true), Sound.deviceGlyph("WH-1000XM5", { "device.form-factor": "headphone" }, true))
+    }
+
     function test_deviceName_is_cleaned_and_falls_back() {
         compare(Sound.deviceName({ description: "Built-in Audio Analog Stereo", nickname: "x", name: "alsa_output.pci" }), "Built-in Audio Analog Stereo")
         compare(Sound.deviceName({ description: "", nickname: "Nick", name: "alsa_output.pci" }), "Nick")

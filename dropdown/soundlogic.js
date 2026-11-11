@@ -60,12 +60,45 @@ function deviceName(node) {
 function deviceGlyph(name, props, isOutput) {
     var ff = String((props && props["device.form-factor"]) || "").toLowerCase()
     if (ff.indexOf("head") >= 0 || ff.indexOf("hands-free") >= 0 || ff.indexOf("handset") >= 0)
-        return ""
+        return "headphones"
     if (ff.indexOf("webcam") >= 0)
-        return ""
+        return "videocam"
     if (isOutput && (/hdmi|displayport/i.test(name) || /\bDP\b/.test(name)))
-        return ""
-    return isOutput ? "" : ""
+        return "tv"
+    return isOutput ? "speaker" : "mic"
+}
+
+// The ports each sink offers, from `pactl -f json list sinks`: { sinkName: { active, ports: [{ name, label, type }] } }.
+// A port the driver reports as "not available" (nothing plugged in) is left out. Bad input gives {}.
+function parsePorts(text) {
+    var sinks
+    try {
+        sinks = JSON.parse(text)
+    } catch (e) {
+        return {}
+    }
+    var out = {}
+    if (!Array.isArray(sinks))
+        return out
+    sinks.forEach(function (s) {
+        if (!s || typeof s.name !== "string")
+            return
+        var ports = (Array.isArray(s.ports) ? s.ports : [])
+            .filter(function (p) { return p && typeof p.name === "string" && p.availability !== "not available" })
+            .map(function (p) { return { name: p.name, label: clean(p.description || p.name, 40), type: String(p.type || "") } })
+        out[s.name] = { active: String(s.active_port || ""), ports: ports }
+    })
+    return out
+}
+
+// Device properties for a port, so deviceGlyph / deviceSub treat a Headphones port like headphones.
+function portProps(port, nodeProps) {
+    var props = {}
+    for (var k in nodeProps)
+        props[k] = nodeProps[k]
+    if (/headphone|headset/i.test(port.type || ""))
+        props["device.form-factor"] = "headphone"
+    return props
 }
 
 function deviceSub(name, props) {

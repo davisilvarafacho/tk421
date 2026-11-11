@@ -70,7 +70,51 @@ Singleton {
         entry("webcam", "Webcam C920", { "device.form-factor": "webcam", "device.bus": "usb" }, false, mockInCur === "webcam", null)
     ]
 
-    readonly property var outputs: mock ? mockOutputs : sinkNodes.map(n => entry(n.id, Logic.deviceName(n), n.properties, true, n.id === defSink?.id, n))
+    // A sink with several plugged-in ports (the motherboard's front headphones and rear line out) is one PipeWire node,
+    // so each port becomes its own entry; PipeWire does not expose ports to Quickshell, `pactl` reads and sets them.
+    property var portInfo: ({})
+
+    function outputEntries(n) {
+        const info = portInfo[n.name]
+        if (!info || info.ports.length < 2)
+            return [entry(n.id, Logic.deviceName(n), n.properties, true, n.id === defSink?.id, n)]
+        return info.ports.map(p => {
+            const e = entry(n.id + ":" + p.name, p.label, Logic.portProps(p, n.properties), true,
+                n.id === defSink?.id && p.name === info.active, n)
+            e.port = p.name
+            return e
+        })
+    }
+
+    function refreshPorts() {
+        if (!mock && !portReader.running)
+            portReader.running = true
+    }
+
+    onSinkNodesChanged: refreshPorts()
+    onDefSinkChanged: refreshPorts()
+    Component.onCompleted: refreshPorts()
+
+    Process {
+        id: portReader
+
+        command: ["pactl", "-f", "json", "list", "sinks"]
+        stdout: StdioCollector {
+            onStreamFinished: root.portInfo = Logic.parsePorts(text)
+        }
+    }
+
+    Process {
+        id: portSetter
+
+        property string sink: ""
+        property string port: ""
+
+        command: ["pactl", "set-sink-port", sink, port]
+        onExited: root.refreshPorts()
+    }
+
+    readonly property var outputs: mock ? mockOutputs : sinkNodes.reduce((all, n) => all.concat(outputEntries(n)), [])
     readonly property var inputs: mock ? mockInputs : sourceNodes.map(n => entry(n.id, Logic.deviceName(n), n.properties, false, n.id === defSource?.id, n))
 
     // ---- actions ----
@@ -129,6 +173,11 @@ Singleton {
                 mockInCur = id
         } else if (kind === "out") {
             Pipewire.preferredDefaultAudioSink = e.ref
+            if (e.port) {
+                portSetter.sink = e.ref.name
+                portSetter.port = e.port
+                portSetter.running = true
+            }
         } else {
             Pipewire.preferredDefaultAudioSource = e.ref
         }
