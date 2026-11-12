@@ -209,7 +209,7 @@ PanelWindow {
                     width: 15
                     height: 15
                     source: Qt.resolvedUrl("../assets/claude.svg")
-                    sourceSize: Qt.size(30, 30)
+                    sourceSize: Qt.size(15, 15)
                 }
 
                 Text {

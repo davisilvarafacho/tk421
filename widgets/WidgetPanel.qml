@@ -27,7 +27,7 @@ Rectangle {
         height: 15
         visible: panel.icon.toString() !== ""
         source: panel.icon
-        sourceSize: Qt.size(30, 30)
+        sourceSize: Qt.size(15, 15)
     }
 
     Text {

@@ -61,7 +61,7 @@ function iconSource(appIcon) {
 // Apps whose notifications get a themed icon from assets/<asset>.svg instead of the icon the app sent (or none).
 // Matched on the app name, or on the title for apps that send no name (Claude Code, through the terminal).
 var APP_RULES = [
-    { app: /claude/i, title: /^claude code\b/i, name: "Claude Code", asset: "claude-spark" }
+    { app: /claude/i, title: /^claude code\b/i, name: "Claude Code", asset: "claude" }
 ]
 
 // What the header of a notification shows: the app's name and the themed icon, if any.

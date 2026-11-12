@@ -30,8 +30,8 @@ Item {
         anchors.verticalCenter: parent.verticalCenter
         width: 14
         height: 14
-        source: Qt.resolvedUrl("../assets/claude-spark.svg")
-        sourceSize: Qt.size(28, 28)
+        source: Qt.resolvedUrl("../assets/claude.svg")
+        sourceSize: Qt.size(14, 14)     // rasterised at its drawn size: the logo's thin rays stay sharp
         opacity: chip.off ? 0.5 : 1
 
         Behavior on opacity { NumberAnimation { duration: 200 } }

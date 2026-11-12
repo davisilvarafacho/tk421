@@ -142,11 +142,11 @@ TestCase {
     function test_appLabel_claude_code_by_title() {
         const l = Logic.appLabel("", "com.mitchellh.ghostty", "Claude Code")
         compare(l.name, "Claude Code")
-        compare(l.asset, "claude-spark")
+        compare(l.asset, "claude")
     }
 
     function test_appLabel_claude_by_app_name() {
-        compare(Logic.appLabel("claude", "", "anything").asset, "claude-spark")
+        compare(Logic.appLabel("claude", "", "anything").asset, "claude")
     }
 
     function test_appLabel_a_title_that_merely_mentions_claude_is_not_claude_code() {
