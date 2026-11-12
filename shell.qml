@@ -10,6 +10,7 @@ import "notifications"
 import "resources"
 import "usage"
 import "wallpaper"
+import "widgets"
 import "services"
 
 ShellRoot {
@@ -38,6 +39,7 @@ ShellRoot {
     NotificationCenter {}
     UsageCard {}
     WallpaperStage {}
+    DesktopWidgets {}
     WallpaperPicker {}
     Lock {}
 }

@@ -1,0 +1,297 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>TK-421 Desktop Widgets</title>
+<style>
+  /* Desktop widgets, first pass (2026-11-12), frontend-design skill.
+     Subject: the user's own workstation on an ultrawide 2560x1080 monitor, the wallpaper is a centred subject on black.
+     Job: glanceable status on an empty workspace (6 for now), never in the way: Bottom layer, under every window.
+     Layout: two flank columns, 400 px, 30 px from each wall (the bar pills' margin), first item 30 px under the bar.
+     The centre third stays empty for the wallpaper.
+        ┌──────────────────────────── bar 38 ────────────────────────────┐
+        │ 14:32                                          ╭ Today ──────╮ │
+        │ ▮▮▮▮▮▮▮▮▮▮▮|·········   (second ruler)         │ events      │ │
+        │ Thursday, 12 November                          ╰─────────────╯ │
+        │ ╭ CPU GPU RAM ──╮          (wallpaper)         ╭ Now playing ╮ │
+        │ │ sparks, cores │                              ╰─────────────╯ │
+        │ ╰───────────────╯                              ╭ Comms ──────╮ │
+        │ ╭ Claude plan ──╮                              │ last 3      │ │
+        │ ╰───────────────╯                              ╰─────────────╯ │
+        └────────────────────────────────────────────────────────────────┘
+     One bold move: the clock is not a card. Big thin Orbitron straight on the wallpaper, with a 60-tick second ruler
+     under it, like a range marking on a hull. Everything else is the shell's quiet ink panel (20 px radius, hairline),
+     the same tokens as the resources panel and the comms log, Orbitron only for small Imperial labels and numbers.
+     Only the media controls take clicks; everything else is click-through (empty QML mask). */
+  :root {
+    color-scheme: dark;
+    --ink: #000;
+    --line: rgba(255, 255, 255, 0.09);
+    --text: #e8e6e3;
+    --muted: #8e8b88;
+    --faint: #5e5c60;
+    --chip: #1a1a21;
+    --track: #1f1f25;
+    --steel: #b9b6b2;
+    --alert: #d9808a;
+    --ease: cubic-bezier(0.22, 1, 0.36, 1);
+    --ui: "Geist", sans-serif;
+    --display: "Orbitron", "Geist", sans-serif;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  html, body { height: 100%; }
+  body { background: #050505; color: var(--text); font: 13px/1.4 var(--ui); overflow: hidden; -webkit-font-smoothing: antialiased; }
+  button { font: inherit; color: inherit; background: none; border: 0; cursor: pointer; }
+  :focus-visible { outline: 1px solid #7d8db0; outline-offset: 2px; }
+
+  .ms {
+    font-family: "Material Symbols Sharp"; font-size: 16px; line-height: 1; font-weight: normal;
+    font-variation-settings: "FILL" 0, "wght" 300, "GRAD" 0, "opsz" 24;
+    display: inline-block; width: 1em; height: 1em; overflow: hidden; user-select: none;
+  }
+  .ms.fill { font-variation-settings: "FILL" 1, "wght" 300, "GRAD" 0, "opsz" 24; }
+
+  /* the real monitor, scaled to fit the browser */
+  .screen {
+    position: absolute; left: 50%; top: 50%; width: 2560px; height: 1080px; transform-origin: 0 0;
+    background: #000 url("wallpaper.jpg") center / auto 100% no-repeat; overflow: hidden;
+  }
+
+  /* bar context, simplified */
+  .pill { position: absolute; top: 4px; height: 30px; background: var(--ink); border: 1px solid var(--line); border-radius: 15px; }
+  .island { position: absolute; top: 0; left: 50%; width: 144px; height: 38px; margin-left: -72px; background: var(--ink); border-radius: 0 0 18px 18px; }
+
+  /* ---------- columns ---------- */
+  .col { position: absolute; top: 68px; bottom: 30px; width: 400px; display: flex; flex-direction: column; gap: 12px; }
+  .col.left { left: 30px; }
+  .col.right { right: 30px; }
+  .push { margin-top: auto; }
+
+  .panel { background: var(--ink); border: 1px solid var(--line); border-radius: 20px; padding: 18px 20px 20px; }
+  .head { display: flex; align-items: baseline; justify-content: space-between; margin-bottom: 14px; }
+  .label { font: 400 10px/1 var(--display); letter-spacing: 0.22em; color: var(--muted); text-transform: uppercase; }
+  .aside { font: 400 11px/1 var(--ui); color: var(--faint); }
+
+  /* ---------- clock: the one bold element ---------- */
+  .clock { padding: 6px 0 22px 2px; }
+  .time { font: 300 132px/0.9 var(--display); letter-spacing: -0.01em; color: var(--text); font-variant-numeric: tabular-nums; }
+  .time .colon { color: var(--faint); }
+  .ruler { position: relative; margin-top: 22px; width: 396px; height: 14px; display: flex; justify-content: space-between; align-items: flex-end; }
+  .ruler i { width: 1px; height: 6px; background: #2c2c33; }
+  .ruler i:nth-child(5n+1) { height: 10px; background: #3d3d45; }
+  .ruler i.past { background: #6d6b6e; }
+  .ruler i.now { background: var(--text); height: 14px; }
+  .date { margin-top: 14px; display: flex; gap: 14px; align-items: baseline; }
+  .date b { font: 400 17px/1 var(--ui); color: var(--text); }
+  .date span { font: 400 10px/1 var(--display); letter-spacing: 0.22em; color: var(--faint); }
+
+  /* ---------- resources ---------- */
+  .gauges { display: grid; grid-template-columns: repeat(3, 1fr); gap: 18px; }
+  .g .name { font: 400 10px/1 var(--display); letter-spacing: 0.22em; color: var(--muted); }
+  .g .big { margin-top: 10px; font: 500 26px/1 var(--display); letter-spacing: 0.02em; font-variant-numeric: tabular-nums; }
+  .g .big small { font: 400 11px/1 var(--display); color: var(--muted); margin-left: 3px; }
+  .g .sub { margin-top: 6px; font: 400 11px/1 var(--ui); color: var(--faint); }
+  .spark { margin-top: 12px; height: 34px; width: 100%; display: block; overflow: visible; }
+  .spark .fill { fill: rgba(185, 182, 178, 0.10); }
+  .spark .line { fill: none; stroke: var(--steel); stroke-width: 1.4; stroke-linejoin: round; vector-effect: non-scaling-stroke; }
+  .cores { margin-top: 18px; display: grid; grid-template-columns: repeat(16, 1fr); gap: 3px; height: 26px; }
+  .cores i { background: var(--track); border-radius: 1.5px; position: relative; overflow: hidden; }
+  .cores i::after { content: ""; position: absolute; left: 0; right: 0; bottom: 0; height: var(--v, 0%); background: #7f7d80; transition: height 600ms var(--ease); }
+  .facts { margin-top: 16px; display: flex; justify-content: space-between; font: 400 11px/1 var(--ui); color: var(--faint); }
+  .facts b { font-weight: 400; color: var(--muted); }
+
+  /* ---------- claude usage ---------- */
+  .meter + .meter { margin-top: 16px; }
+  .meter .top { display: flex; justify-content: space-between; align-items: baseline; }
+  .meter .top span { font: 400 12px/1 var(--ui); color: var(--muted); }
+  .meter .top b { font: 500 13px/1 var(--display); color: var(--text); font-variant-numeric: tabular-nums; }
+  .track { margin-top: 9px; height: 3px; border-radius: 2px; background: var(--track); overflow: hidden; }
+  .track i { display: block; height: 100%; background: var(--steel); }
+  .meter .reset { margin-top: 7px; font: 400 11px/1 var(--ui); color: var(--faint); }
+
+  /* ---------- agenda ---------- */
+  .day + .day { margin-top: 16px; }
+  .day h3 { font: 400 11px/1 var(--ui); color: var(--faint); margin-bottom: 8px; }
+  .ev { display: grid; grid-template-columns: 74px 1fr; gap: 12px; padding: 6px 0; align-items: baseline; }
+  .ev time { font: 400 11px/1.3 var(--display); letter-spacing: 0.04em; color: var(--muted); font-variant-numeric: tabular-nums; }
+  .ev p { font: 400 13px/1.3 var(--ui); color: var(--text); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .ev p small { display: block; font-size: 11px; color: var(--faint); }
+  .ev.next { position: relative; }
+  .ev.next::before { content: ""; position: absolute; left: -20px; top: 7px; bottom: 7px; width: 2px; background: var(--text); border-radius: 0 2px 2px 0; }
+  .ev.done p, .ev.done time { color: var(--faint); }
+
+  /* ---------- media ---------- */
+  .media { display: grid; grid-template-columns: 76px 1fr; gap: 16px; align-items: center; }
+  .art { width: 76px; height: 76px; border-radius: 10px; background: linear-gradient(145deg, #3a3a40, #121215); filter: grayscale(1); }
+  .track-title { font: 500 15px/1.25 var(--ui); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .track-artist { margin-top: 3px; font: 400 12px/1.2 var(--ui); color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .ctrl { margin-top: 10px; display: flex; align-items: center; gap: 4px; margin-left: -6px; }
+  .ctrl button { width: 30px; height: 26px; border-radius: 8px; display: grid; place-items: center; color: #b5bac3; transition: background-color 140ms, color 140ms; }
+  .ctrl button:hover { background: var(--chip); color: var(--text); }
+  .ctrl .src { margin-left: auto; font: 400 11px/1 var(--ui); color: var(--faint); }
+  .progress { margin-top: 14px; display: grid; grid-template-columns: auto 1fr auto; gap: 10px; align-items: center; font: 400 10px/1 var(--display); color: var(--faint); font-variant-numeric: tabular-nums; }
+  .progress .track { margin: 0; }
+
+  /* ---------- comms ---------- */
+  .msg { display: grid; grid-template-columns: 28px 1fr auto; gap: 12px; padding: 8px 0; }
+  .msg + .msg { border-top: 1px solid rgba(255, 255, 255, 0.05); }
+  .tile { width: 28px; height: 28px; border-radius: 8px; background: var(--chip); display: grid; place-items: center; color: #b5bac3; }
+  .msg p { font: 500 13px/1.3 var(--ui); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .msg p small { display: block; font-weight: 400; font-size: 12px; color: var(--muted); overflow: hidden; text-overflow: ellipsis; }
+  .msg time { font: 400 11px/1.3 var(--ui); color: var(--faint); }
+  .msg.crit p { color: var(--alert); }
+
+  .note { position: fixed; left: 12px; bottom: 10px; font: 400 11px/1.4 var(--ui); color: #5e5c60; }
+  @media (prefers-reduced-motion: reduce) { * { transition: none !important; } }
+</style>
+</head>
+<body>
+<div class="screen" id="screen">
+  <div class="pill" style="left:30px;width:212px"></div>
+  <div class="pill" style="left:250px;width:268px"></div>
+  <div class="island"></div>
+  <div class="pill" style="right:330px;width:110px"></div>
+  <div class="pill" style="right:30px;width:292px"></div>
+
+  <!-- left flank -->
+  <section class="col left">
+    <div class="clock" aria-label="Clock">
+      <div class="time" id="time">14<span class="colon">:</span>32</div>
+      <div class="ruler" id="ruler"></div>
+      <div class="date"><b id="date">Thursday, 12 November</b><span id="week">WEEK 46</span></div>
+    </div>
+
+    <div class="panel">
+      <div class="head"><span class="label">Systems</span><span class="aside">up 3 d 14 h</span></div>
+      <div class="gauges">
+        <div class="g"><div class="name">CPU</div><div class="big"><span id="vCpu">18</span><small>%</small></div><div class="sub">54 °C · 4.6 GHz</div>
+          <svg class="spark" id="sCpu" viewBox="0 0 120 34" preserveAspectRatio="none"><path class="fill"/><path class="line"/></svg></div>
+        <div class="g"><div class="name">GPU</div><div class="big"><span id="vGpu">7</span><small>%</small></div><div class="sub">41 °C · 38 W</div>
+          <svg class="spark" id="sGpu" viewBox="0 0 120 34" preserveAspectRatio="none"><path class="fill"/><path class="line"/></svg></div>
+        <div class="g"><div class="name">RAM</div><div class="big"><span id="vRam">13.4</span><small>GB</small></div><div class="sub">of 32 GB</div>
+          <svg class="spark" id="sRam" viewBox="0 0 120 34" preserveAspectRatio="none"><path class="fill"/><path class="line"/></svg></div>
+      </div>
+      <div class="cores" id="cores"></div>
+      <div class="facts"><span>VRAM <b>3.1 / 16 GB</b></span><span>Disk <b>412 / 931 GB</b></span><span>Busiest <b>vivaldi</b></span></div>
+    </div>
+
+    <div class="panel push">
+      <div class="head"><span class="label">Claude plan</span><span class="aside">updated 2m ago</span></div>
+      <div class="meter"><div class="top"><span>Session, 5 hours</span><b>42%</b></div><div class="track"><i style="width:42%"></i></div><div class="reset">Resets at 17:10</div></div>
+      <div class="meter"><div class="top"><span>Week</span><b>63%</b></div><div class="track"><i style="width:63%"></i></div><div class="reset">Resets Monday 09:00</div></div>
+    </div>
+  </section>
+
+  <!-- right flank -->
+  <section class="col right">
+    <div class="panel">
+      <div class="head"><span class="label">Agenda</span><span class="aside">4 events this week</span></div>
+      <div class="day"><h3>Today</h3>
+        <div class="ev done"><time>09:30</time><p>Daily standup</p></div>
+        <div class="ev next"><time>15:00</time><p>Design review: island v3<small>in 28 min · Meet</small></p></div>
+        <div class="ev"><time>19:00</time><p>Gym</p></div>
+      </div>
+      <div class="day"><h3>Tomorrow</h3>
+        <div class="ev"><time>All day</time><p>Ana's birthday</p></div>
+        <div class="ev"><time>10:00</time><p>Dentist</p></div>
+      </div>
+    </div>
+
+    <div class="panel">
+      <div class="head"><span class="label">Now playing</span></div>
+      <div class="media">
+        <div class="art"></div>
+        <div style="min-width:0">
+          <div class="track-title">The Imperial March</div>
+          <div class="track-artist">John Williams, London Symphony Orchestra</div>
+          <div class="ctrl">
+            <button aria-label="Previous"><span class="ms fill">skip_previous</span></button>
+            <button aria-label="Pause" id="play"><span class="ms fill">pause</span></button>
+            <button aria-label="Next"><span class="ms fill">skip_next</span></button>
+            <span class="src">Spotify</span>
+          </div>
+        </div>
+      </div>
+      <div class="progress"><span id="pos">1:12</span><div class="track"><i id="bar" style="width:24%"></i></div><span>3:03</span></div>
+    </div>
+
+    <div class="panel push">
+      <div class="head"><span class="label">Comms</span><span class="aside">6 unread</span></div>
+      <div class="msg crit"><span class="tile"><span class="ms">battery_alert</span></span><p>Controller battery low<small>Xbox controller at 5%</small></p><time>now</time></div>
+      <div class="msg"><span class="tile"><span class="ms">chat</span></span><p>jacaré<small>belezinha, amanhã a gente vê isso</small></p><time>4m</time></div>
+      <div class="msg"><span class="tile"><span class="ms">mail</span></span><p>Pull request merged<small>feat(island): hanging silhouette</small></p><time>1h</time></div>
+    </div>
+  </section>
+</div>
+
+<script>
+  const screen = document.getElementById("screen");
+  function fit() {
+    const s = Math.min(innerWidth / 2560, innerHeight / 1080);
+    screen.style.transform = `scale(${s}) translate(-50%, -50%)`;
+  }
+  addEventListener("resize", fit); fit();
+
+  // clock + second ruler
+  const ruler = document.getElementById("ruler");
+  for (let i = 0; i < 60; i++) ruler.appendChild(document.createElement("i"));
+  const ticks = [...ruler.children];
+  const days = ["Sunday","Monday","Tuesday","Wednesday","Thursday","Friday","Saturday"];
+  const months = ["January","February","March","April","May","June","July","August","September","October","November","December"];
+  function week(d) {
+    const t = new Date(Date.UTC(d.getFullYear(), d.getMonth(), d.getDate()));
+    t.setUTCDate(t.getUTCDate() + 4 - (t.getUTCDay() || 7));
+    return Math.ceil(((t - new Date(Date.UTC(t.getUTCFullYear(), 0, 1))) / 864e5 + 1) / 7);
+  }
+  function tick() {
+    const d = new Date(), s = d.getSeconds(), p = n => String(n).padStart(2, "0");
+    document.getElementById("time").innerHTML = `${p(d.getHours())}<span class="colon">:</span>${p(d.getMinutes())}`;
+    ticks.forEach((t, i) => { t.className = i < s ? "past" : i === s ? "now" : ""; });
+    document.getElementById("date").textContent = `${days[d.getDay()]}, ${d.getDate()} ${months[d.getMonth()]}`;
+    document.getElementById("week").textContent = `WEEK ${week(d)}`;
+  }
+
+  // fake telemetry
+  const hist = { cpu: [], gpu: [], ram: [] };
+  for (let i = 0; i < 60; i++) { hist.cpu.push(12 + Math.random() * 18); hist.gpu.push(4 + Math.random() * 8); hist.ram.push(40 + Math.random() * 3); }
+  const cores = document.getElementById("cores");
+  for (let i = 0; i < 32; i++) cores.appendChild(document.createElement("i"));
+  function spark(id, series) {
+    const svg = document.getElementById(id), n = series.length;
+    const pts = series.map((v, i) => [i * 120 / (n - 1), 34 - v / 100 * 34]);
+    const line = pts.map((p, i) => (i ? "L" : "M") + p[0].toFixed(1) + " " + p[1].toFixed(1)).join(" ");
+    svg.querySelector(".line").setAttribute("d", line);
+    svg.querySelector(".fill").setAttribute("d", line + " L120 34 L0 34 Z");
+  }
+  function sample() {
+    const push = (k, v) => { hist[k].push(v); hist[k].shift(); };
+    push("cpu", Math.max(3, Math.min(95, hist.cpu.at(-1) + (Math.random() - 0.5) * 12)));
+    push("gpu", Math.max(1, Math.min(90, hist.gpu.at(-1) + (Math.random() - 0.5) * 6)));
+    push("ram", Math.max(38, Math.min(46, hist.ram.at(-1) + (Math.random() - 0.5))));
+    spark("sCpu", hist.cpu); spark("sGpu", hist.gpu); spark("sRam", hist.ram);
+    document.getElementById("vCpu").textContent = Math.round(hist.cpu.at(-1));
+    document.getElementById("vGpu").textContent = Math.round(hist.gpu.at(-1));
+    document.getElementById("vRam").textContent = (hist.ram.at(-1) / 100 * 32).toFixed(1);
+    [...cores.children].forEach(c => c.style.setProperty("--v", Math.round(Math.random() ** 2.4 * 100) + "%"));
+  }
+
+  // media position
+  let pos = 72, playing = true;
+  const dur = 183;
+  document.getElementById("play").onclick = e => {
+    playing = !playing;
+    e.currentTarget.innerHTML = `<span class="ms fill">${playing ? "pause" : "play_arrow"}</span>`;
+    e.currentTarget.setAttribute("aria-label", playing ? "Pause" : "Play");
+  };
+  function media() {
+    if (playing) pos = (pos + 1) % dur;
+    document.getElementById("pos").textContent = `${Math.floor(pos / 60)}:${String(pos % 60).padStart(2, "0")}`;
+    document.getElementById("bar").style.width = (pos / dur * 100) + "%";
+  }
+
+  tick(); sample(); media();
+  setInterval(() => { tick(); sample(); media(); }, 1000);
+</script>
+</body>
+</html>

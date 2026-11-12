@@ -20,6 +20,7 @@ Singleton {
     property bool capsuleHovered: false
     property bool panelHovered: false
     property bool open: false
+    property bool watched: false        // the desktop widgets are showing: keep the detail sample running too
 
     property real cpu: 0
     property var cores: []
@@ -166,7 +167,7 @@ Singleton {
     Timer {
         interval: 2000
         repeat: true
-        running: root.open
+        running: root.open || root.watched
         triggeredOnStart: true
         onTriggered: if (!sampler.running) sampler.running = true
     }
