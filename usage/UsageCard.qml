@@ -208,7 +208,7 @@ PanelWindow {
                     anchors.verticalCenter: parent.verticalCenter
                     width: 15
                     height: 15
-                    source: Qt.resolvedUrl("../assets/claude-spark.svg")
+                    source: Qt.resolvedUrl("../assets/claude.svg")
                     sourceSize: Qt.size(30, 30)
                 }
 

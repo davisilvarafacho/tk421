@@ -27,7 +27,7 @@ local function ghostty(class, fontSize, padX, opacity, command)
 end
 
 local widgets = {
-	-- btop: 760 px wide, font 8 (~104 columns; it needs 80), transparent: the wallpaper shows through, blurred by Hyprland
+	-- btop: 1000 px wide, font 8 (~138 columns; it needs 80), transparent: the wallpaper shows through, blurred by Hyprland
 	{ class = "com.tk421.widget.btop", font = 8, pad = 12, opacity = 0, command = "btop --config " .. dir .. "/btop.conf" },
 	-- gradient mode (-k is the core, -c the rim): bright steel core fading to graphite, slow, eight small balls (the window is only ~55x17 cells)
 	{ class = "com.tk421.widget.lavat", font = 8, pad = 14, opacity = 1, command = "lavat -g -c 2C2C33 -k E8E6E3 -s 2 -r 2 -b 8" },
