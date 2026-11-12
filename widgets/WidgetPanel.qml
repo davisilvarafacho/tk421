@@ -9,6 +9,7 @@ Rectangle {
 
     property string label: ""
     property string aside: ""
+    property url icon: ""               // optional monochrome mark before the label (an SVG in assets/)
     default property alias content: body.data
 
     implicitHeight: body.y + body.implicitHeight + 20
@@ -17,8 +18,20 @@ Rectangle {
     border.width: 1
     border.color: Theme.imperial.hairline
 
-    Text {
+    Image {
+        id: mark
+
         x: 20
+        y: 16
+        width: 15
+        height: 15
+        visible: panel.icon.toString() !== ""
+        source: panel.icon
+        sourceSize: Qt.size(30, 30)
+    }
+
+    Text {
+        x: mark.visible ? 20 + 15 + 9 : 20
         y: 19
         text: panel.label
         color: Theme.imperial.muted

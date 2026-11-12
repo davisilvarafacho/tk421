@@ -13,6 +13,7 @@ WidgetPanel {
     readonly property bool ok: ClaudeUsage.status === "ok"
 
     label: "Claude plan"
+    icon: Qt.resolvedUrl("../assets/claude.svg")
     aside: ok ? "updated " + UsageLogic.ago(ClaudeUsage.updatedAt, now)
         : ClaudeUsage.status === "unknown" ? "reading…" : "offline"
 
