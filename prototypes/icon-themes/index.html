@@ -1,0 +1,104 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Icon Themes</title>
+<!-- Comparison of monochrome app-icon themes on the TK-421 palette, using the user's installed apps.
+     Columns: the app's own icon, monotile (circle / squircle), Monochrome Icons, full-icon-themes "dark",
+     and the TK421 concept (Simple Icons brand marks in steel, Material Symbols Sharp where no brand exists). -->
+<link href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500&family=Orbitron:wght@500;600&display=swap" rel="stylesheet">
+<style>
+  @font-face { font-family: "MS"; src: url("file:///usr/share/fonts/TTF/MaterialSymbolsSharp[FILL,GRAD,opsz,wght].ttf"); }
+  :root { --ink:#000; --surface:#0C0B0D; --alt:#1A1A21; --text:#E8E6E3; --muted:#8E8B88; --hair:rgba(255,255,255,.09);
+          --steel:#b9b6b2; --sz:48px; --bg:var(--surface); --display:"Orbitron",sans-serif; --ui:"Geist",system-ui,sans-serif; }
+  * { box-sizing: border-box; }
+  body { margin:0; background:var(--bg); color:var(--text); font:13px/1.45 var(--ui); transition: background 200ms; }
+  main { max-width:1180px; margin:0 auto; padding:28px 16px 60px; }
+  header { display:flex; flex-wrap:wrap; gap:16px 28px; align-items:flex-end; justify-content:space-between; margin-bottom:22px; }
+  h1 { margin:0; font:600 15px var(--display); letter-spacing:.22em; }
+  .sub { color:var(--muted); margin-top:6px; max-width:620px; }
+  .ctl { display:flex; flex-wrap:wrap; gap:14px; align-items:center; }
+  .seg { display:inline-flex; background:var(--ink); border-radius:15px; box-shadow:inset 0 0 0 1px var(--hair); padding:3px; }
+  .seg button { all:unset; cursor:pointer; padding:4px 11px; border-radius:12px; font:600 10px var(--display); letter-spacing:.14em; color:var(--muted); }
+  .seg button.on { background:var(--alt); color:var(--text); }
+  label.c { font:600 10px var(--display); letter-spacing:.14em; color:var(--muted); display:inline-flex; gap:8px; align-items:center; }
+  input[type=color] { width:26px; height:22px; border:0; padding:0; background:none; cursor:pointer; }
+  .wrap { overflow-x:auto; border-radius:14px; box-shadow:inset 0 0 0 1px var(--hair); }
+  table { border-collapse:collapse; width:100%; min-width:900px; }
+  th { font:600 10px var(--display); letter-spacing:.16em; color:var(--muted); text-align:center; padding:14px 8px 10px; vertical-align:bottom; }
+  th small { display:block; font:400 11px var(--ui); letter-spacing:0; color:#6c6a68; margin-top:4px; text-transform:none; }
+  th.ours { color:var(--text); }
+  td { text-align:center; padding:9px 8px; border-top:1px solid var(--hair); height:calc(var(--sz) + 22px); }
+  td.app { text-align:left; padding-left:18px; color:var(--muted); white-space:nowrap; font-size:12px; }
+  col.ours { background:rgba(255,255,255,.025); }
+  .ic { width:var(--sz); height:var(--sz); display:inline-block; vertical-align:middle; object-fit:contain; }
+  .mask { background:var(--steel); -webkit-mask:var(--u) center/contain no-repeat; mask:var(--u) center/contain no-repeat; width:calc(var(--sz)*.78); height:calc(var(--sz)*.78); }
+  .ms { font-family:"MS"; font-variation-settings:"wght" 300,"FILL" 0,"GRAD" 0,"opsz" 24; font-size:calc(var(--sz)*.82); line-height:1; color:var(--steel); width:var(--sz); height:var(--sz); display:inline-flex; align-items:center; justify-content:center; }
+  .none { color:#4a4846; font:600 9px var(--display); letter-spacing:.14em; }
+  tfoot td { font:600 10px var(--display); letter-spacing:.12em; color:var(--muted); height:auto; padding:12px 8px; }
+  .dock { margin-top:30px; display:flex; flex-direction:column; gap:12px; }
+  .dock h2 { margin:0; font:600 11px var(--display); letter-spacing:.24em; color:var(--muted); }
+  .bar { display:inline-flex; gap:10px; padding:10px 16px; background:var(--ink); border-radius:22px; box-shadow:inset 0 0 0 1px var(--hair); align-self:flex-start; flex-wrap:wrap; }
+  .bar .ic, .bar .ms { --sz:40px; }
+</style>
+</head>
+<body>
+<main>
+  <header>
+    <div>
+      <h1>APP ICONS / MONO</h1>
+      <div class="sub">Your installed apps under each candidate theme, on the TK-421 surfaces. "Not covered" means that theme falls back to another (usually coloured) theme for this app.</div>
+    </div>
+    <div class="ctl">
+      <div class="seg" id="sz"><button data-v="24px">24</button><button data-v="48px" class="on">48</button><button data-v="64px">64</button></div>
+      <div class="seg" id="bg"><button data-v="#000">INK</button><button data-v="#0C0B0D" class="on">SURFACE</button><button data-v="#3a3d44">LIGHT</button></div>
+      <label class="c">STEEL <input type="color" id="steel" value="#b9b6b2"></label>
+    </div>
+  </header>
+  <div class="wrap"><table id="t">
+    <colgroup><col><col><col><col><col><col><col class="ours"></colgroup>
+    <thead><tr>
+      <th></th>
+      <th>ORIGINAL<small>what you see today</small></th>
+      <th>MONOTILE · CIRCLE<small>generator, any app</small></th>
+      <th>MONOTILE · SQUIRCLE<small>same, other tile</small></th>
+      <th>MONOCHROME ICONS<small>hand-drawn, Xfce/MX</small></th>
+      <th>FULL-ICON-THEMES<small>"dark", archived</small></th>
+      <th class="ours">TK421 CONCEPT<small>Simple Icons in steel, Material Symbols fallback</small></th>
+    </tr></thead>
+    <tbody></tbody>
+    <tfoot><tr id="cov"></tr></tfoot>
+  </table></div>
+  <div class="dock">
+    <h2>AS A DOCK</h2>
+    <div id="docks" style="display:flex;flex-direction:column;gap:12px"></div>
+  </div>
+</main>
+<script>
+const ROWS = [ {  "label": "Vivaldi",  "name": "vivaldi",  "orig": "orig/vivaldi.svg",  "mt_circle": "monotile-circle/vivaldi.png",  "mt_squircle": "monotile-squircle/vivaldi.png",  "fit": "fit/vivaldi.svg",  "si": "si/vivaldi.svg" }, {  "label": "Ghostty",  "name": "com.mitchellh.ghostty",  "orig": "orig/com.mitchellh.ghostty.png",  "mt_circle": "monotile-circle/com.mitchellh.ghostty.png",  "mt_squircle": "monotile-squircle/com.mitchellh.ghostty.png",  "fit": "fit/com.mitchellh.ghostty.svg",  "si": "si/ghostty.svg" }, {  "label": "VS Code",  "name": "vscode",  "orig": "orig/vscode.png",  "mt_circle": "monotile-circle/vscode.png",  "mt_squircle": "monotile-squircle/vscode.png",  "mono": "monochrome/vscode.png",  "fit": "fit/vscode.svg",  "si": "si/visualstudiocode.svg" }, {  "label": "Spotify",  "name": "spotify-client",  "orig": "orig/spotify-client.png",  "mt_circle": "monotile-circle/spotify-client.png",  "mt_squircle": "monotile-squircle/spotify-client.png",  "mono": "monochrome/spotify-client.png",  "fit": "fit/spotify-client.svg",  "si": "si/spotify.svg" }, {  "label": "Discord",  "name": "discord",  "orig": "orig/discord.png",  "mt_circle": "monotile-circle/discord.png",  "mt_squircle": "monotile-squircle/discord.png",  "fit": "fit/discord.svg",  "si": "si/discord.svg" }, {  "label": "Telegram",  "name": "org.telegram.desktop",  "orig": "orig/org.telegram.desktop.png",  "mt_circle": "monotile-circle/org.telegram.desktop.png",  "mt_squircle": "monotile-squircle/org.telegram.desktop.png",  "fit": "fit/org.telegram.desktop.svg",  "si": "si/telegram.svg" }, {  "label": "Claude",  "name": "claude-desktop",  "orig": "orig/claude-desktop.png",  "mt_circle": "monotile-circle/claude-desktop.png",  "mt_squircle": "monotile-squircle/claude-desktop.png",  "si": "si/claude.svg" }, {  "label": "ChatGPT",  "name": "chatgpt",  "orig": "orig/chatgpt.png",  "mt_circle": "monotile-circle/chatgpt.png",  "mt_squircle": "monotile-squircle/chatgpt.png",  "mono": "monochrome/chatgpt.png",  "si": "si/openai.svg" }, {  "label": "Firefox",  "name": "firefox",  "orig": "orig/firefox.svg",  "mt_circle": "monotile-circle/firefox.png",  "mt_squircle": "monotile-squircle/firefox.png",  "fit": "fit/firefox.svg",  "si": "si/firefoxbrowser.svg" }, {  "label": "Thunderbird",  "name": "org.mozilla.Thunderbird",  "orig": "orig/org.mozilla.Thunderbird.png",  "mt_circle": "monotile-circle/org.mozilla.Thunderbird.png",  "mt_squircle": "monotile-squircle/org.mozilla.Thunderbird.png",  "mono": "monochrome/org.mozilla.Thunderbird.png",  "fit": "fit/org.mozilla.Thunderbird.svg",  "si": "si/thunderbird.svg" }, {  "label": "OBS Studio",  "name": "com.obsproject.Studio",  "orig": "orig/com.obsproject.Studio.svg",  "mt_circle": "monotile-circle/com.obsproject.Studio.png",  "mt_squircle": "monotile-squircle/com.obsproject.Studio.png",  "fit": "fit/com.obsproject.Studio.svg",  "si": "si/obsstudio.svg" }, {  "label": "Steam",  "name": "steam",  "orig": "orig/steam.png",  "mt_circle": "monotile-circle/steam.png",  "mt_squircle": "monotile-squircle/steam.png",  "fit": "fit/steam.svg",  "si": "si/steam.svg" }, {  "label": "Neovim",  "name": "nvim",  "orig": "orig/nvim.png",  "mt_circle": "monotile-circle/nvim.png",  "mt_squircle": "monotile-squircle/nvim.png",  "fit": "fit/nvim.svg",  "si": "si/neovim.svg" }, {  "label": "Helix",  "name": "helix",  "orig": "orig/helix.png",  "mt_circle": "monotile-circle/helix.png",  "mt_squircle": "monotile-squircle/helix.png",  "si": "si/helix.svg" }, {  "label": "LocalSend",  "name": "localsend",  "orig": "orig/localsend.png",  "mt_circle": "monotile-circle/localsend.png",  "mt_squircle": "monotile-squircle/localsend.png",  "fit": "fit/localsend.svg",  "si": "si/localsend.svg" }, {  "label": "AnyDesk",  "name": "anydesk",  "orig": "orig/anydesk.svg",  "mt_circle": "monotile-circle/anydesk.png",  "mt_squircle": "monotile-squircle/anydesk.png",  "fit": "fit/anydesk.svg",  "si": "si/anydesk.svg" }, {  "label": "RustDesk",  "name": "rustdesk",  "orig": "orig/rustdesk.svg",  "mt_circle": "monotile-circle/rustdesk.png",  "mt_squircle": "monotile-squircle/rustdesk.png",  "si": "si/rustdesk.svg" }, {  "label": "Antigravity",  "name": "antigravity",  "orig": "orig/antigravity.png",  "mt_circle": "monotile-circle/antigravity.png",  "mt_squircle": "monotile-squircle/antigravity.png",  "ms": "rocket_launch" }, {  "label": "Ghidra",  "name": "ghidra",  "orig": "orig/ghidra.png",  "mt_circle": "monotile-circle/ghidra.png",  "mt_squircle": "monotile-squircle/ghidra.png",  "ms": "bug_report" }, {  "label": "btop",  "name": "btop",  "orig": "orig/btop.svg",  "mt_circle": "monotile-circle/btop.png",  "mt_squircle": "monotile-squircle/btop.png",  "mono": "monochrome/btop.png",  "fit": "fit/btop.svg",  "ms": "monitoring" }, {  "label": "Volume",  "name": "org.pulseaudio.pavucontrol",  "orig": "orig/org.pulseaudio.pavucontrol.svg",  "mt_circle": "monotile-circle/org.pulseaudio.pavucontrol.png",  "mt_squircle": "monotile-squircle/org.pulseaudio.pavucontrol.png",  "mono": "monochrome/org.pulseaudio.pavucontrol.png",  "fit": "fit/org.pulseaudio.pavucontrol.svg",  "ms": "volume_up" }, {  "label": "Imagens",  "name": "org.gnome.Loupe",  "orig": "orig/org.gnome.Loupe.svg",  "mt_circle": "monotile-circle/org.gnome.Loupe.png",  "mt_squircle": "monotile-squircle/org.gnome.Loupe.png",  "fit": "fit/org.gnome.Loupe.svg",  "ms": "image" }, {  "label": "Documentos",  "name": "org.gnome.Papers",  "orig": "orig/org.gnome.Papers.svg",  "mt_circle": "monotile-circle/org.gnome.Papers.png",  "mt_squircle": "monotile-squircle/org.gnome.Papers.png",  "ms": "description" }];
+const COLS = [["orig","img"],["mt_circle","img"],["mt_squircle","img"],["mono","img"],["fit","img"],["si","ours"]];
+const cell = (r, k, kind) => {
+  if (kind === "ours") {
+    if (r.si) return '<span class="ic mask" style="--u:url(assets/' + r.si + ')"></span>';
+    if (r.ms) return '<span class="ms">' + r.ms + '</span>';
+    return '<span class="none">NOT COVERED</span>';
+  }
+  return r[k] ? '<img class="ic" src="assets/' + r[k] + '" alt="">' : '<span class="none">NOT COVERED</span>';
+};
+const tb = document.querySelector("#t tbody");
+tb.innerHTML = ROWS.map(r => '<tr><td class="app">' + r.label + '</td>' + COLS.map(([k, kind]) => '<td>' + cell(r, k, kind) + '</td>').join("") + '</tr>').join("");
+document.getElementById("cov").innerHTML = '<td class="app">COVERAGE</td>' + COLS.map(([k, kind]) =>
+  '<td>' + ROWS.filter(r => kind === "ours" ? (r.si || r.ms) : r[k]).length + ' / ' + ROWS.length + '</td>').join("");
+const names = { mt_circle:"MONOTILE CIRCLE", mt_squircle:"MONOTILE SQUIRCLE", mono:"MONOCHROME ICONS", fit:"FULL-ICON-THEMES", si:"TK421 CONCEPT" };
+const pick = ROWS.slice(0, 12);
+document.getElementById("docks").innerHTML = COLS.slice(1).map(([k, kind]) =>
+  '<div><div class="none" style="margin:0 0 6px 4px">' + names[k] + '</div><div class="bar">' + pick.map(r => cell(r, k, kind)).join("") + '</div></div>').join("");
+const seg = (id, fn) => document.querySelectorAll("#" + id + " button").forEach(b => b.onclick = () => {
+  document.querySelectorAll("#" + id + " button").forEach(x => x.classList.toggle("on", x === b)); fn(b.dataset.v); });
+seg("sz", v => document.documentElement.style.setProperty("--sz", v));
+seg("bg", v => document.documentElement.style.setProperty("--bg", v));
+document.getElementById("steel").oninput = e => document.documentElement.style.setProperty("--steel", e.target.value);
+</script>
+</body>
+</html>

@@ -1,0 +1,216 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>GTK Imperial</title>
+<!-- What a libadwaita (GTK4) app would look like under the TK-421 theme the generator will write
+     (~/.config/gtk-4.0/gtk.css, plus GTK3 and Qt from the same tokens). Radii and colours are copied from the
+     shell as it is today: cards 16, rows 10, buttons 8, chips 6 (Launcher.qml, ClipboardCard.qml, DropdownHost.qml);
+     steel accent, no hue, red only for destructive actions. -->
+<link href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600&family=Orbitron:wght@500;600&display=swap" rel="stylesheet">
+<style>
+  @font-face { font-family: "MS"; src: url("file:///usr/share/fonts/TTF/MaterialSymbolsSharp[FILL,GRAD,opsz,wght].ttf"); }
+  :root {
+    /* Theme.imperial tokens */
+    --bg:#050505; --ink:#000; --surface:#0C0B0D; --alt:#1A1A21; --border:#3F3E44; --hair:rgba(255,255,255,.09);
+    --text:#E8E6E3; --muted:#8E8B88; --steel:#B9B6B2; --danger:#A14D55; --dangerText:#D9808A;
+    /* derived for GTK */
+    --window:var(--surface); --header:var(--ink); --view:#08080A; --card:#121116; --hover:rgba(255,255,255,.06);
+    --active:rgba(255,255,255,.10); --sel:rgba(185,182,178,.16);
+    --r-card:16px; --r-row:10px; --r-btn:8px; --r-chip:6px;
+    --ui:"Geist",system-ui,sans-serif; --display:"Orbitron",sans-serif;
+  }
+  * { box-sizing:border-box; }
+  body { margin:0; background:var(--bg); color:var(--text); font:13px/1.45 var(--ui);
+         background-image:radial-gradient(1200px 600px at 70% -10%, #15161b 0%, transparent 60%); min-height:100vh; }
+  main { max-width:1220px; margin:0 auto; padding:28px 16px 60px; display:flex; flex-direction:column; gap:26px; }
+  .top h1 { margin:0; font:600 15px var(--display); letter-spacing:.22em; }
+  .top p { margin:6px 0 0; color:var(--muted); max-width:680px; }
+  .ms { font-family:"MS"; font-variation-settings:"wght" 300,"FILL" 0,"GRAD" 0,"opsz" 24; font-size:18px; line-height:1; display:inline-block; }
+
+  /* ---- window ---- */
+  .win { background:var(--window); border-radius:var(--r-card); box-shadow:0 0 0 1px var(--hair), 0 24px 60px rgba(0,0,0,.6); overflow:hidden; display:flex; flex-direction:column; }
+  .hb { height:46px; background:var(--header); display:flex; align-items:center; gap:6px; padding:0 8px; border-bottom:1px solid var(--hair); }
+  .hb .title { flex:1; text-align:center; font-weight:600; }
+  .hb .title small { display:block; font-weight:400; color:var(--muted); font-size:11px; margin-top:-2px; }
+  .wc { display:flex; gap:6px; }
+  .wc span { width:22px; height:22px; border-radius:50%; background:var(--alt); display:grid; place-items:center; color:var(--muted); font-size:14px; }
+  .wc span:hover { background:var(--active); color:var(--text); }
+
+  button { font:inherit; color:inherit; }
+  .btn { all:unset; cursor:pointer; height:32px; padding:0 14px; border-radius:var(--r-btn); background:var(--alt); display:inline-flex; align-items:center; gap:8px; font-weight:500; transition:background 120ms, color 120ms; }
+  .btn:hover { background:#24242c; }
+  .btn:active { background:#2c2c35; }
+  .btn.flat { background:transparent; } .btn.flat:hover { background:var(--hover); }
+  .btn.icon { width:32px; padding:0; justify-content:center; }
+  .btn.sugg { background:var(--steel); color:#0b0b0d; } .btn.sugg:hover { background:#cfccc8; }
+  .btn.dest { background:rgba(161,77,85,.18); color:var(--dangerText); } .btn.dest:hover { background:rgba(161,77,85,.28); }
+  .btn.pill { border-radius:16px; padding:0 18px; }
+  .btn:focus-visible { outline:2px solid rgba(185,182,178,.5); outline-offset:1px; }
+
+  .body { display:flex; min-height:520px; }
+  .side { width:220px; background:var(--ink); padding:8px; display:flex; flex-direction:column; gap:2px; border-right:1px solid var(--hair); }
+  .side .row { display:flex; align-items:center; gap:10px; height:36px; padding:0 10px; border-radius:var(--r-row); color:#c9c6c2; cursor:pointer; }
+  .side .row:hover { background:var(--hover); }
+  .side .row.on { background:var(--sel); color:var(--text); }
+  .side .sec { font:600 9.5px var(--display); letter-spacing:.2em; color:var(--muted); padding:14px 10px 6px; }
+  .content { flex:1; padding:22px 28px; display:flex; flex-direction:column; gap:20px; overflow:auto; }
+  .group h3 { margin:0 0 8px 4px; font:600 10px var(--display); letter-spacing:.2em; color:var(--muted); }
+  .boxed { background:var(--card); border-radius:var(--r-row); box-shadow:0 0 0 1px var(--hair); overflow:hidden; }
+  .boxed .r { display:flex; align-items:center; gap:14px; min-height:54px; padding:8px 14px; }
+  .boxed .r + .r { border-top:1px solid var(--hair); }
+  .boxed .r:hover { background:rgba(255,255,255,.025); }
+  .r .t { flex:1; } .r .t small { display:block; color:var(--muted); font-size:12px; }
+
+  .sw { width:40px; height:22px; border-radius:11px; background:#2a2a32; position:relative; cursor:pointer; transition:background 140ms; flex:none; }
+  .sw::after { content:""; position:absolute; top:3px; left:3px; width:16px; height:16px; border-radius:50%; background:#8E8B88; transition:transform 160ms, background 140ms; }
+  .sw.on { background:var(--steel); } .sw.on::after { transform:translateX(18px); background:#0b0b0d; }
+  .chk { width:18px; height:18px; border-radius:5px; box-shadow:inset 0 0 0 1.5px #55545a; display:grid; place-items:center; cursor:pointer; flex:none; }
+  .chk.on { background:var(--steel); box-shadow:none; color:#0b0b0d; } .chk.on::after { content:"check"; font-family:"MS"; font-size:15px; font-variation-settings:"wght" 500; }
+  .entry { height:34px; border-radius:var(--r-btn); background:#000; box-shadow:inset 0 0 0 1px var(--border); padding:0 12px; display:flex; align-items:center; gap:8px; color:var(--muted); min-width:240px; }
+  .entry.focus { box-shadow:inset 0 0 0 1.5px var(--steel); color:var(--text); }
+  .entry .caret { width:1px; height:16px; background:var(--text); animation:blink 1s steps(1) infinite; }
+  @keyframes blink { 50% { opacity:0; } }
+  .drop { height:32px; border-radius:var(--r-btn); background:var(--alt); padding:0 10px 0 12px; display:inline-flex; align-items:center; gap:10px; }
+  .slider { width:200px; height:4px; border-radius:2px; background:#2a2a32; position:relative; }
+  .slider i { position:absolute; inset:0 40% 0 0; background:var(--steel); border-radius:2px; }
+  .slider b { position:absolute; left:60%; top:50%; width:16px; height:16px; margin:-8px 0 0 -8px; border-radius:50%; background:var(--text); box-shadow:0 1px 4px rgba(0,0,0,.6); }
+  .prog { height:4px; border-radius:2px; background:#2a2a32; overflow:hidden; } .prog i { display:block; width:64%; height:100%; background:var(--steel); }
+  .chips { display:flex; gap:6px; flex-wrap:wrap; }
+  .chip { height:26px; padding:0 10px; border-radius:var(--r-chip); background:var(--alt); display:inline-flex; align-items:center; gap:6px; font-size:12px; color:#c9c6c2; }
+  .chip.on { background:var(--sel); color:var(--text); box-shadow:inset 0 0 0 1px rgba(185,182,178,.35); }
+  .rowbtns { display:flex; gap:8px; flex-wrap:wrap; align-items:center; }
+
+  /* popover + toast */
+  .stage { position:relative; }
+  .pop { position:absolute; right:14px; top:52px; width:220px; background:#111015; border-radius:12px; box-shadow:0 0 0 1px var(--hair), 0 18px 40px rgba(0,0,0,.6); padding:6px; z-index:3; }
+  .pop .i { height:32px; display:flex; align-items:center; gap:10px; padding:0 10px; border-radius:var(--r-chip); color:#d5d2ce; }
+  .pop .i:hover { background:var(--hover); }
+  .pop .i kbd { margin-left:auto; font:500 11px var(--ui); color:var(--muted); }
+  .pop hr { border:0; border-top:1px solid var(--hair); margin:5px 4px; }
+  .toast { position:absolute; left:50%; bottom:18px; transform:translateX(-50%); background:#1c1b21; border-radius:22px; height:40px; padding:0 8px 0 18px; display:flex; align-items:center; gap:14px; box-shadow:0 0 0 1px var(--hair), 0 10px 30px rgba(0,0,0,.6); }
+
+  /* file chooser */
+  .dialog { max-width:880px; }
+  .fc { display:flex; min-height:380px; }
+  .fc .side { width:190px; }
+  .fc .list { flex:1; display:flex; flex-direction:column; }
+  .path { display:flex; gap:4px; align-items:center; padding:10px 14px; border-bottom:1px solid var(--hair); }
+  .crumb { height:28px; padding:0 10px; border-radius:var(--r-chip); display:inline-flex; align-items:center; color:var(--muted); }
+  .crumb.on { background:var(--alt); color:var(--text); }
+  .files { flex:1; padding:6px 8px; }
+  .f { display:grid; grid-template-columns:28px 1fr 90px 120px; align-items:center; height:36px; padding:0 10px; border-radius:var(--r-row); color:#d5d2ce; }
+  .f:hover { background:var(--hover); } .f.on { background:var(--sel); color:var(--text); }
+  .f .ms { color:var(--steel); } .f span:nth-child(3), .f span:nth-child(4) { color:var(--muted); font-size:12px; text-align:right; }
+  .fhead { color:var(--muted); font:600 9.5px var(--display); letter-spacing:.18em; height:28px; }
+  .foot { display:flex; justify-content:flex-end; gap:8px; padding:12px 14px; border-top:1px solid var(--hair); background:var(--ink); }
+
+  .two { display:grid; grid-template-columns:1fr; gap:26px; }
+  @media (max-width:820px) { .side { display:none; } .entry { min-width:0; flex:1; } .f { grid-template-columns:28px 1fr 70px; } .f span:nth-child(4) { display:none; } }
+</style>
+</head>
+<body>
+<main>
+  <div class="top">
+    <h1>GTK / IMPERIAL</h1>
+    <p>A libadwaita app and the "Open file" dialog under the TK-421 window theme. Every widget state shown is what the generated <code>gtk.css</code> would style; hover the rows and buttons. Radii come from the shell: card 16, row 10, button 8, chip 6. Steel is the accent, red only for destructive actions.</p>
+  </div>
+
+  <div class="win stage">
+    <div class="hb">
+      <button class="btn flat icon"><span class="ms">arrow_back</span></button>
+      <button class="btn flat icon"><span class="ms">search</span></button>
+      <div class="title">Preferences<small>TK-421 workstation</small></div>
+      <button class="btn flat icon" style="background:var(--hover)"><span class="ms">menu</span></button>
+      <div class="wc"><span class="ms" style="font-size:14px">remove</span><span class="ms" style="font-size:13px">crop_square</span><span class="ms" style="font-size:14px">close</span></div>
+    </div>
+    <div class="pop">
+      <div class="i"><span class="ms">tab</span>New Window<kbd>Ctrl+N</kbd></div>
+      <div class="i"><span class="ms">keyboard</span>Keyboard Shortcuts<kbd>Ctrl+?</kbd></div>
+      <hr>
+      <div class="i"><span class="ms">info</span>About</div>
+    </div>
+    <div class="body">
+      <div class="side">
+        <div class="sec">SYSTEM</div>
+        <div class="row on"><span class="ms">tune</span>General</div>
+        <div class="row"><span class="ms">palette</span>Appearance</div>
+        <div class="row"><span class="ms">notifications</span>Notifications</div>
+        <div class="row"><span class="ms">volume_up</span>Sound</div>
+        <div class="sec">DEVICES</div>
+        <div class="row"><span class="ms">keyboard</span>Keyboard</div>
+        <div class="row"><span class="ms">headphones</span>Headset</div>
+        <div class="row"><span class="ms">monitor</span>Displays</div>
+      </div>
+      <div class="content">
+        <div class="group">
+          <h3>BEHAVIOUR</h3>
+          <div class="boxed">
+            <div class="r"><div class="t">Show hidden files<small>Dotfiles appear in every folder view</small></div><div class="sw on" onclick="this.classList.toggle('on')"></div></div>
+            <div class="r"><div class="t">Sort folders before files</div><div class="sw" onclick="this.classList.toggle('on')"></div></div>
+            <div class="r"><div class="t">Default view<small>Used for folders without a saved view</small></div><div class="drop">Miller columns <span class="ms" style="font-size:16px;color:var(--muted)">expand_more</span></div></div>
+            <div class="r"><div class="t">Thumbnail size</div><div class="slider"><i></i><b></b></div></div>
+          </div>
+        </div>
+        <div class="group">
+          <h3>ACCOUNT</h3>
+          <div class="boxed">
+            <div class="r"><div class="t">Device name</div><div class="entry focus">TK-421<span class="caret"></span></div></div>
+            <div class="r"><div class="chk on" onclick="this.classList.toggle('on')"></div><div class="t">Sync bookmarks<small>Across HyprFM windows</small></div></div>
+            <div class="r"><div class="chk" onclick="this.classList.toggle('on')"></div><div class="t">Send crash reports</div></div>
+            <div class="r"><div class="t">Indexing<small>12 840 of 20 000 files</small><div class="prog" style="margin-top:8px"><i></i></div></div></div>
+          </div>
+        </div>
+        <div class="group">
+          <h3>TAGS</h3>
+          <div class="chips"><span class="chip on">Projects</span><span class="chip">Wallpapers</span><span class="chip">Keyboard</span><span class="chip">Screenshots</span></div>
+        </div>
+        <div class="rowbtns">
+          <button class="btn">Cancel</button>
+          <button class="btn sugg">Apply</button>
+          <button class="btn flat">Reset to defaults</button>
+          <span style="flex:1"></span>
+          <button class="btn dest"><span class="ms" style="font-size:16px">delete</span>Clear history</button>
+          <button class="btn pill">Pill button</button>
+        </div>
+      </div>
+    </div>
+    <div class="toast">3 files moved to Trash <button class="btn flat" style="height:28px">Undo</button><button class="btn flat icon" style="height:28px;width:28px"><span class="ms" style="font-size:16px">close</span></button></div>
+  </div>
+
+  <div class="win dialog">
+    <div class="hb">
+      <button class="btn flat">Cancel</button>
+      <div class="title">Open File</div>
+      <button class="btn flat icon"><span class="ms">search</span></button>
+      <button class="btn sugg">Open</button>
+    </div>
+    <div class="fc">
+      <div class="side">
+        <div class="row"><span class="ms">schedule</span>Recent</div>
+        <div class="row on"><span class="ms">home</span>Home</div>
+        <div class="row"><span class="ms">download</span>Downloads</div>
+        <div class="row"><span class="ms">image</span>Pictures</div>
+        <div class="row"><span class="ms">description</span>Documents</div>
+        <div class="sec">DEVICES</div>
+        <div class="row"><span class="ms">hard_drive</span>Archive</div>
+      </div>
+      <div class="list">
+        <div class="path"><span class="crumb">/</span><span class="ms" style="font-size:14px;color:var(--muted)">chevron_right</span><span class="crumb">home</span><span class="ms" style="font-size:14px;color:var(--muted)">chevron_right</span><span class="crumb on">tk421</span></div>
+        <div class="files">
+          <div class="f fhead"><span></span><span>NAME</span><span>SIZE</span><span>MODIFIED</span></div>
+          <div class="f"><span class="ms">folder</span><span>Development</span><span>14 items</span><span>Today</span></div>
+          <div class="f on"><span class="ms">folder</span><span>Pictures</span><span>6 items</span><span>Yesterday</span></div>
+          <div class="f"><span class="ms">folder</span><span>Music</span><span>212 items</span><span>Nov 3</span></div>
+          <div class="f"><span class="ms">image</span><span>deathstar.png</span><span>2.1 MB</span><span>Oct 28</span></div>
+          <div class="f"><span class="ms">description</span><span>notes.md</span><span>4 KB</span><span>Oct 20</span></div>
+          <div class="f"><span class="ms">movie</span><span>capture.mkv</span><span>380 MB</span><span>Oct 12</span></div>
+        </div>
+        <div class="foot"><div class="drop">All files <span class="ms" style="font-size:16px;color:var(--muted)">expand_more</span></div></div>
+      </div>
+    </div>
+  </div>
+</main>
+</body>
+</html>

@@ -1,0 +1,420 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>TK-421 Launcher Island</title>
+<style>
+  /* v6 (2026-11-12): SUPER+Space grows the Dynamic Island into the launcher. Surface brief:
+     .impeccable/surfaces/launcher-launcher-qml.md. Tokens are Theme.imperial; geometry is island/Island.qml
+     (open card 820x456, flare 10, radius 18, 520 ms open / 340 ms close on bezier 0.22 1 0.36 1).
+     Isometric objects: iso/ (Isoflow's own icon collection, recoloured to graphite, see iso/README.md). */
+  :root {
+    color-scheme: dark;
+    --ink: #000;
+    --rowHover: #0D0D10;
+    --surfaceAlt: #1A1A21;
+    --text: #E8E6E3;
+    --muted: #8E8B88;
+    --faint: #75737A;
+    --hair: rgba(255, 255, 255, .09);
+    --rule: rgba(255, 255, 255, .07);
+    --ease: cubic-bezier(.22, 1, .36, 1);
+    --ui: "Geist", ui-sans-serif, system-ui, sans-serif;
+    --display: "Orbitron", "Geist", sans-serif;
+  }
+  @font-face { font-family: "MS"; src: url("file:///usr/share/fonts/TTF/MaterialSymbolsSharp[FILL,GRAD,opsz,wght].ttf"); }
+  * { box-sizing: border-box; margin: 0; }
+  html, body { height: 100%; background: #050505; overflow: hidden; }
+  body { font: 400 14px/1.35 var(--ui); color: var(--text); -webkit-font-smoothing: antialiased; }
+  ::selection { background: #3F3E44; color: var(--text); }
+
+  .wall { position: fixed; inset: 0; background: url("wallpaper.jpg") center / cover no-repeat; filter: brightness(.8); }
+  .scrim { position: fixed; inset: 0; background: rgba(5, 5, 5, .35); opacity: 0; pointer-events: none; transition: opacity 200ms; }
+  .open .scrim { opacity: 1; pointer-events: auto; }
+
+  /* context: the real bar pills */
+  .pills { position: fixed; top: 4px; display: flex; gap: 8px; }
+  .pills.l { left: 30px; } .pills.r { right: 30px; }
+  .pill { height: 30px; border-radius: 15px; background: var(--ink); border: 1px solid var(--hair); padding: 0 16px;
+    display: flex; align-items: center; gap: 12px; font: 500 11px var(--ui); color: var(--muted); }
+  .ms { font: 16px/1 "MS"; font-variation-settings: "wght" 300, "FILL" 0, "GRAD" 0, "opsz" 24; }
+
+  /* ---------- the island ---------- */
+  .island { position: fixed; top: 0; left: 50%; transform: translateX(-50%); width: 144px; height: 38px; z-index: 2;
+    background: var(--ink); border-radius: 0 0 18px 18px;
+    transition: width 340ms var(--ease), height 340ms var(--ease); }
+  .open .island { width: 820px; height: 456px; transition-duration: 520ms; }
+  .island.hud { width: 290px; height: 52px; }
+  .island::before, .island::after { content: ""; position: absolute; top: 0; width: 10px; height: 10px; }
+  .island::before { left: -10px; background: radial-gradient(circle at 0 100%, transparent 9.5px, var(--ink) 10px); }
+  .island::after { right: -10px; background: radial-gradient(circle at 100% 100%, transparent 9.5px, var(--ink) 10px); }
+
+  .clock, .hudtext { position: absolute; inset: 0; display: grid; place-items: center; transition: opacity 120ms; }
+  .clock { font: 500 13px var(--display); letter-spacing: .14em; color: var(--text); }
+  .open .clock, .island.hud .clock { opacity: 0; }
+  .hudtext { opacity: 0; font-size: 13px; color: var(--muted); }
+  .hudtext b { color: var(--text); font-weight: 500; }
+  .island.hud .hudtext { opacity: 1; transition: opacity 240ms 120ms; }
+
+  .card { position: absolute; inset: 0; display: grid; grid-template-rows: 60px 1fr 40px; opacity: 0; pointer-events: none;
+    transition: opacity 60ms; }
+  .open .card { opacity: 1; pointer-events: auto; transition: opacity 320ms 160ms; }
+
+  /* search row */
+  .search { display: flex; align-items: center; gap: 14px; padding: 6px 24px 0; border-bottom: 1px solid var(--rule); }
+  .mark { flex: none; fill: none; stroke: var(--muted); stroke-width: 1.5; }
+  .search:focus-within .mark { stroke: var(--text); }
+  .search input { flex: 1; min-width: 0; height: 100%; background: none; border: 0; outline: 0;
+    font: 400 17px var(--ui); color: var(--text); caret-color: var(--text); }
+  .search input::placeholder { color: var(--faint); }
+  .modes { display: flex; gap: 4px; }
+  .mode { all: unset; cursor: pointer; display: flex; align-items: center; gap: 7px; height: 28px; padding: 0 10px 0 4px;
+    border-radius: 10px; font-size: 12px; color: var(--faint); transition: background-color 140ms, color 140ms; }
+  .mode:hover { background: var(--rowHover); color: var(--muted); }
+  .mode .k { display: grid; place-items: center; width: 20px; height: 20px; border-radius: 6px; background: var(--surfaceAlt);
+    color: var(--muted); font-size: 12px; font-weight: 500; }
+  .mode.on { background: var(--surfaceAlt); color: var(--text); }
+  .mode.on .k { background: var(--ink); color: var(--text); }
+  .mode:focus-visible { outline: 1px solid var(--muted); outline-offset: 1px; }
+
+  /* body */
+  .body { display: grid; grid-template-columns: 392px 1fr; min-height: 0; }
+  .list { overflow-y: auto; padding: 6px 8px 8px; border-right: 1px solid var(--rule); scrollbar-width: none; }
+  .sec { padding: 12px 14px 6px; font-size: 12px; color: var(--faint); }
+  .row { position: relative; display: flex; align-items: center; gap: 12px; height: 40px; padding: 0 14px; border-radius: 14px;
+    cursor: default; transition: background-color 140ms; }
+  .row.sel { background: var(--surfaceAlt); }
+  .ico { flex: none; width: 20px; height: 20px; display: grid; place-items: center; }
+  .ico img { width: 20px; height: 20px; object-fit: contain; filter: grayscale(1); opacity: .62; transition: opacity 140ms; }
+  .row.sel .ico img { opacity: 1; }
+  .ini { width: 20px; height: 20px; border-radius: 6px; background: var(--surfaceAlt); display: grid; place-items: center;
+    font: 600 9px var(--ui); color: var(--muted); }
+  .row.sel .ini { background: var(--ink); color: var(--text); }
+  .ico .ms { font-size: 18px; color: var(--muted); }
+  .row.sel .ico .ms { color: var(--text); }
+  .nm { min-width: 0; flex: 0 1 auto; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; color: var(--muted); transition: color 140ms; }
+  .row.sel .nm { color: var(--text); }
+  .nm mark { background: none; color: var(--text); font-weight: 600; }
+  .row.sel .nm mark { color: #fff; }
+  .gn { flex: 1 1 0; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; font-size: 12px; color: var(--faint); }
+  .at { flex: none; font-size: 12px; color: var(--faint); font-variant-numeric: tabular-nums; }
+  .run { position: absolute; left: 5px; top: 17px; width: 4px; height: 6px; border-radius: 2px; background: var(--muted); }
+  .row.sel .run { background: var(--text); }
+
+  /* detail */
+  .detail { display: flex; flex-direction: column; gap: 12px; padding: 16px 22px 14px; min-width: 0; }
+  .scene { position: relative; flex: none; height: 148px; border-radius: 16px; background: var(--rowHover); overflow: hidden; }
+  .scene svg.floor { position: absolute; inset: 0; width: 100%; height: 100%; }
+  .plinth { position: absolute; left: 50%; bottom: 14px; width: 128px; transform: translateX(-50%); }
+  .obj { position: absolute; left: 50%; bottom: 46px; height: 82px; max-width: 120px; object-fit: contain; transform: translateX(-50%); }
+  .obj.drop { animation: drop 300ms var(--ease); }
+  @keyframes drop { from { opacity: 0; transform: translate(-50%, -16px); } }
+  .scene .ord { position: absolute; left: 14px; top: 12px; font: 500 9px var(--display); letter-spacing: .22em; color: var(--faint); }
+  .who { display: flex; align-items: center; gap: 12px; }
+  .who .ico, .who .ico img, .who .ini { width: 32px; height: 32px; }
+  .who .ico img { opacity: 1; }
+  .who .ini { border-radius: 9px; font-size: 12px; background: var(--surfaceAlt); color: var(--text); }
+  .who .ico .ms { font-size: 28px; color: var(--text); }
+  .who h2 { font: 500 17px var(--ui); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .who p { font-size: 12.5px; color: var(--muted); }
+  .desc { font-size: 13px; color: var(--muted); display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+  .meta { font-size: 12px; color: var(--faint); font-variant-numeric: tabular-nums; display: flex; gap: 14px; flex-wrap: wrap; }
+  .acts { display: flex; gap: 6px; flex-wrap: wrap; margin-top: auto; }
+  .act { all: unset; cursor: pointer; height: 30px; padding: 0 12px; border-radius: 10px; background: var(--rowHover);
+    font-size: 12.5px; color: var(--muted); display: flex; align-items: center; transition: background-color 140ms, color 140ms; }
+  .act:hover, .act.sel { background: var(--surfaceAlt); color: var(--text); }
+  .act.sel { box-shadow: inset 0 0 0 1px rgba(255, 255, 255, .14); }
+  .big { font: 300 44px/1 var(--ui); font-variant-numeric: tabular-nums; letter-spacing: -.02em; color: var(--text); overflow-wrap: anywhere; }
+  .empty { padding: 18px 14px; color: var(--muted); font-size: 13px; }
+  .empty b { color: var(--text); font-weight: 500; }
+
+  /* footer */
+  .foot { display: flex; align-items: center; gap: 18px; padding: 0 24px; border-top: 1px solid var(--rule); font-size: 12px; color: var(--faint); }
+  .kc { display: inline-grid; place-items: center; min-width: 20px; height: 20px; padding: 0 5px; margin-right: 7px; border-radius: 6px;
+    background: var(--surfaceAlt); color: var(--muted); font-size: 11px; }
+  .tag { margin-left: auto; font: 500 9px var(--display); letter-spacing: .24em; color: var(--faint); }
+
+  .hint { position: fixed; right: 20px; bottom: 18px; font-size: 12px; color: #b5bac3; opacity: .75; text-shadow: 0 1px 3px #000; }
+  @media (prefers-reduced-motion: reduce) {
+    .island, .card, .obj.drop { transition: none !important; animation: none !important; }
+  }
+</style>
+</head>
+<body>
+<div class="wall"></div>
+<div class="scrim" id="scrim"></div>
+<div class="pills l"><div class="pill"><span>CPU 9%</span><span>RAM 31%</span><span>GPU 4%</span></div><div class="pill"><span>1</span><span style="color:var(--text)">2</span><span>3</span><span>6</span></div></div>
+<div class="pills r"><div class="pill"><span class="ms">cloud</span><span class="ms">bluetooth</span></div><div class="pill"><span class="ms">lan</span><span class="ms">volume_up</span><span class="ms">notifications</span><span class="ms">power_settings_new</span></div></div>
+
+<div class="island" id="island">
+  <div class="clock" id="clock">16:24</div>
+  <div class="hudtext" id="hud"></div>
+  <div class="card" role="dialog" aria-label="Launcher">
+    <label class="search">
+      <svg class="mark" viewBox="0 0 24 24" width="20" height="20" aria-hidden="true"><circle cx="12" cy="12" r="8.6"/><path d="M3.4 12.6h17.2"/><circle cx="15.6" cy="8.4" r="2.2"/></svg>
+      <input id="q" type="text" placeholder="Search apps" autocomplete="off" spellcheck="false" aria-controls="list">
+      <div class="modes" id="modes">
+        <button class="mode" data-p="=" tabindex="-1"><span class="k">=</span>Calculate</button>
+        <button class="mode" data-p=">" tabindex="-1"><span class="k">&gt;</span>Shell</button>
+        <button class="mode" data-p="@" tabindex="-1"><span class="k">@</span>Windows</button>
+      </div>
+    </label>
+    <div class="body">
+      <div class="list" id="list" role="listbox"></div>
+      <div class="detail" id="detail" aria-live="polite"></div>
+    </div>
+    <div class="foot" id="foot"></div>
+  </div>
+</div>
+<div class="hint">Space opens · Esc closes · launch counts and windows are sample data</div>
+
+<script>
+  // Real names, generic names, comments, categories and actions from this machine's desktop entries.
+  // Launch counts, last use and open windows are SAMPLE data: the QML keeps its own counts (launcher/history.json).
+  const C = "../icon-themes/assets/candy/";
+  const now = Date.now(), min = 60e3, hr = 36e5, day = 864e5;
+  const APPS = [
+    { n: "Visual Studio Code", g: "Text Editor", c: "Code Editing. Redefined.", cat: "TextEditor;Development;IDE", ic: "vscode", act: ["New Empty Window"], hits: 412, last: now - 3 * min, win: 1 },
+    { n: "Vivaldi", g: "Web Browser", c: "Access the Internet", cat: "Network;WebBrowser", ic: "vivaldi", act: ["New Window", "New Private Window"], hits: 380, last: now - 40 * min, win: 2 },
+    { n: "Ghostty", g: "Terminal", c: "A terminal emulator", cat: "System;TerminalEmulator", ic: "com.mitchellh.ghostty", act: ["New Window"], hits: 344, last: now - 4 * min, win: 2 },
+    { n: "Claude", g: "AI Assistant", c: "Desktop application for Claude.ai", cat: "Utility;Development", ic: "claude-desktop", act: ["New Chat", "New Claude Code Session", "Continue Last Claude Code Session"], hits: 233, last: now - 26 * min },
+    { n: "Spotify", g: "Music Player", c: "", cat: "Audio;Music;Player;AudioVideo", ic: "spotify-client", act: [], hits: 201, last: now - 5 * hr, win: 1 },
+    { n: "Telegram", g: "Messenger", c: "New era of messaging", cat: "Chat;Network;InstantMessaging", ic: "org.telegram.desktop", act: ["Quit Telegram"], hits: 164, last: now - 12 * min },
+    { n: "Discord", g: "Internet Messenger", c: "All-in-one voice and text chat for gamers that's free, secure, and works on both your desktop and phone.", cat: "Network;InstantMessaging", ic: "discord", act: [], hits: 120, last: now - 1.4 * day },
+    { n: "Thunderbird", g: "Mail Client", c: "Send and receive mail with Thunderbird", cat: "Network;Email", ic: "org.mozilla.Thunderbird", act: ["Write new message", "Open address book"], hits: 61, last: now - 2 * hr },
+    { n: "Firefox", g: "Web Browser", c: "Fast and private browser", cat: "Network;WebBrowser", ic: "firefox", act: ["New Window", "New Private Window", "Open Profile Manager"], hits: 22, last: now - 9 * day },
+    { n: "OBS Studio", g: "Streaming/Recording Software", c: "Free and Open Source Streaming/Recording Software", cat: "AudioVideo;Recorder", ic: "com.obsproject.Studio", act: [], hits: 18, last: now - 3 * day },
+    { n: "Steam", g: "Game Library", c: "Application for managing and playing games on Steam", cat: "Network;FileTransfer;Game", ic: "steam", act: ["Library", "Store", "Friends", "Big Picture"], hits: 47, last: now - 1 * day },
+    { n: "Neovim", g: "Text Editor", c: "Edit text files", cat: "Utility;TextEditor;Development", ic: "nvim", act: [], hits: 15, last: now - 6 * day },
+    { n: "HyprFM", g: "File Manager", c: "A lightweight Qt6/QML file manager for Hyprland", cat: "System;FileManager", act: ["New Window"], hits: 39, last: now - 7 * hr },
+    { n: "LocalSend", g: "File Transfer", c: "An open source cross-platform alternative to AirDrop", cat: "FileTransfer;Utility", ic: "localsend", act: [], hits: 9, last: now - 12 * day },
+    { n: "Ghidra", g: "Reverse Engineering", c: "A software reverse engineering framework", cat: "Development;Debugger", ic: "ghidra", act: [], hits: 6, last: now - 20 * day },
+    { n: "Image Viewer", g: "Image Viewer", c: "View and edit images", cat: "Graphics;2DGraphics;RasterGraphics;Viewer", ic: "org.gnome.Loupe", act: [], hits: 31, last: now - 2 * day },
+    { n: "Document Viewer", g: "Document Viewer", c: "View multi-page documents", cat: "Office;Viewer;Graphics", act: ["New Window"], hits: 12, last: now - 4 * day },
+    { n: "Deep Rock Galactic", g: "Game", c: "Play this game on Steam", cat: "Game", hits: 8, last: now - 16 * day },
+  ];
+  const WINDOWS = [
+    { t: "launcher/Launcher.qml — Visual Studio Code", app: "Visual Studio Code", ws: 3 },
+    { t: "~/Development/quickshell", app: "Ghostty", ws: 2 },
+    { t: "qs log -p ~/.config/quickshell/shell.qml", app: "Ghostty", ws: 2 },
+    { t: "Quickshell documentation", app: "Vivaldi", ws: 1 },
+    { t: "Hyprland Wiki", app: "Vivaldi", ws: 1 },
+    { t: "Spotify Premium", app: "Spotify", ws: 5 },
+  ];
+  const SHELL = [
+    { n: "Lock screen", g: "SUPER+L", c: "Locks the session now. Unlock with your password.", iso: "lock", ms: "lock" },
+    { n: "Wallpaper picker", g: "SUPER+ALT+B", c: "Opens the blast door to change the desktop wallpaper.", iso: "image", ms: "wallpaper" },
+    { n: "Clipboard archive", g: "SUPER+H", c: "Copy back or paste anything from the clipboard history.", iso: "queue", ms: "content_paste" },
+    { n: "Comms log", g: "SUPER+N", c: "Shows every notification, grouped by conversation.", iso: "mailmultiple", ms: "notifications" },
+    { n: "Silence notifications", g: "Do not disturb", c: "Popups stop; the comms log still records everything.", iso: "speech", ms: "notifications_paused" },
+    { n: "Suspend", g: "Asks first", c: "Sleeps the machine after you confirm.", iso: "cronjob", ms: "bedtime" },
+    { n: "Reboot", g: "Asks first", c: "Restarts the machine after you confirm.", iso: "server", ms: "restart_alt" },
+    { n: "Power off", g: "Asks first", c: "Shuts the machine down after you confirm.", iso: "block", ms: "power_settings_new" },
+  ];
+  // Desktop-entry category -> Isoflow object (iso/*.svg). First match wins.
+  const ISO = [["TerminalEmulator", "desktop"], ["WebBrowser", "cloud"], ["IDE", "laptop"], ["TextEditor", "document"],
+    ["Debugger", "firewall"], ["InstantMessaging", "speech"], ["Email", "mail"], ["Recorder", "tower"], ["Audio", "tower"],
+    ["FileManager", "storage"], ["FileTransfer", "package-module"], ["Game", "pyramid"], ["RasterGraphics", "image"],
+    ["Office", "document"], ["Development", "function-module"], ["System", "server"]];
+  const isoFor = (a) => a.iso || (ISO.find(([k]) => a.cat?.split(";").includes(k)) || [, "cube"])[1];
+
+  const $ = (s) => document.querySelector(s);
+  const root = document.body, input = $("#q"), list = $("#list"), detail = $("#detail"), foot = $("#foot"), island = $("#island");
+  let rows = [], sel = 0, actSel = -1, lastPointer = null, lastIso = "";
+
+  const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
+  function match(name, q) {   // substring first, then subsequence; contiguous runs and word starts rank higher
+    if (!q) return { score: 0, idx: [] };
+    const n = name.toLowerCase(); q = q.toLowerCase();
+    const at = n.indexOf(q);
+    if (at !== -1) return { score: 1000 - at * 4 - n.length, idx: [...Array(q.length)].map((_, i) => at + i) };
+    const idx = []; let from = 0, score = 0, prev = -2;
+    for (const ch of q) {
+      const i = n.indexOf(ch, from);
+      if (i === -1) return null;
+      score += (i === prev + 1 ? 8 : 0) + (i === 0 || n[i - 1] === " " ? 6 : 0) - (i - from);
+      idx.push(i); prev = i; from = i + 1;
+    }
+    return { score: 400 + score - n.length, idx };
+  }
+  const hl = (name, idx = []) => { const s = new Set(idx); return [...name].map((ch, i) => s.has(i) ? `<mark>${esc(ch)}</mark>` : esc(ch)).join(""); };
+  function ago(t) {
+    const d = now - t;
+    if (d < 2 * min) return "now";
+    if (d < hr) return `${Math.round(d / min)}m`;
+    if (d < day) return `${Math.round(d / hr)}h`;
+    return d < 2 * day ? "yesterday" : `${Math.round(d / day)}d`;
+  }
+  function agoLong(t) { const a = ago(t); return a === "now" || a === "yesterday" ? a : a.replace(/m$/, " min ago").replace(/h$/, " h ago").replace(/d$/, " days ago"); }
+  const icon = (a) => a.ms ? `<span class="ico"><span class="ms">${a.ms}</span></span>`
+    : a.ic ? `<span class="ico"><img src="${C}${a.ic}.svg" alt=""></span>`
+    : `<span class="ico"><span class="ini">${esc(a.n.split(/\s+/).map((w) => w[0]).join("").slice(0, 2))}</span></span>`;
+
+  // Calculator: digits, operators, parentheses, %, ^ only; evaluated without eval.
+  function calc(src) {
+    const t = src.replace(/\s+/g, "").replace(/×/g, "*").replace(/÷/g, "/").replace(/,/g, ".");
+    if (!t || /[^0-9.+\-*/()%^]/.test(t)) return null;
+    let i = 0;
+    const peek = () => t[i], eat = (c) => t[i] === c && ++i;
+    function num() { const m = /^\d*\.?\d+/.exec(t.slice(i)); if (!m) throw 0; i += m[0].length; return +m[0]; }
+    function atom() { if (eat("-")) return -atom(); if (eat("(")) { const v = sum(); if (!eat(")")) throw 0; return v; } let v = num(); if (eat("%")) v /= 100; return v; }
+    function pow() { const b = atom(); return eat("^") ? b ** pow() : b; }
+    function prod() { let v = pow(); for (;;) { if (eat("*")) v *= pow(); else if (eat("/")) v /= pow(); else return v; } }
+    function sum() { let v = prod(); for (;;) { if (eat("+")) v += prod(); else if (eat("-")) v -= prod(); else return v; } }
+    try { const v = sum(); return i === t.length && isFinite(v) ? +v.toFixed(10) : null; } catch { return null; }
+  }
+
+  function build() {
+    const raw = input.value, p = raw[0], body = raw.slice(1).trim(), q = raw.trim();
+    const mode = p === "=" ? "calc" : p === ">" ? "shell" : p === "@" ? "win" : "apps";
+    document.querySelectorAll(".mode").forEach((b) => b.classList.toggle("on", b.dataset.p === p));
+    input.placeholder = "Search apps";
+    if (mode === "calc") {
+      const v = calc(body);
+      return { mode, sections: [{ items: body ? [{ kind: "calc", n: v === null ? "Not a calculation yet" : v.toLocaleString("en-US", { maximumFractionDigits: 10 }), g: body, v, ms: "calculate", iso: "function-module" }] : [] }] };
+    }
+    if (mode === "shell" || mode === "win") {
+      const src = mode === "shell" ? SHELL.map((s) => ({ ...s, kind: "shell" }))
+        : WINDOWS.map((w) => { const a = APPS.find((x) => x.n === w.app); return { kind: "win", n: w.t, g: `${w.app}, workspace ${w.ws}`, ic: a?.ic, ws: w.ws, app: a, iso: "desktop" }; });
+      const items = src.map((it) => ({ it, m: match(it.n, body) })).filter((r) => r.m).sort((a, b) => b.m.score - a.m.score).map((r) => ({ ...r.it, idx: r.m.idx }));
+      return { mode, sections: [{ items }] };
+    }
+    if (!q) {
+      const freq = [...APPS].sort((a, b) => b.hits - a.hits).slice(0, 4);
+      const rec = [...APPS].filter((a) => !freq.includes(a)).sort((a, b) => b.last - a.last).slice(0, 3);
+      return { mode, sections: [{ label: "Frequent", items: freq.map((a) => ({ ...a, kind: "app" })) }, { label: "Recent", items: rec.map((a) => ({ ...a, kind: "app", recent: true })) }] };
+    }
+    // Ranking: match quality first, launch history breaks near-ties.
+    const items = APPS.map((a) => ({ a, m: match(a.n, q) })).filter((r) => r.m)
+      .sort((x, y) => (y.m.score + 18 * Math.log2(1 + y.a.hits)) - (x.m.score + 18 * Math.log2(1 + x.a.hits)))
+      .map((r) => ({ ...r.a, kind: "app", idx: r.m.idx }));
+    return { mode, sections: [{ items }] };
+  }
+
+  let state;
+  function render() {
+    state = build();
+    rows = state.sections.flatMap((s) => s.items);
+    sel = Math.min(sel, Math.max(rows.length - 1, 0)); actSel = -1;
+    let i = 0, html = "";
+    for (const s of state.sections) {
+      if (s.label && s.items.length) html += `<div class="sec">${s.label}</div>`;
+      for (const r of s.items) {
+        const right = r.kind === "app" ? (r.recent ? ago(r.last) : "") : r.kind === "win" ? `ws ${r.ws}` : r.kind === "shell" ? esc(r.g) : "";
+        const gn = r.kind === "app" ? esc(r.g) : r.kind === "win" ? esc(r.app?.n || "") : "";
+        html += `<div class="row${i === sel ? " sel" : ""}" role="option" aria-selected="${i === sel}" data-i="${i}">
+          ${r.win ? '<span class="run" title="Running"></span>' : ""}${icon(r.kind === "win" ? { ...r, n: r.app?.n || r.n } : r)}
+          <span class="nm">${hl(r.n, r.idx)}</span><span class="gn">${gn}</span>${right ? `<span class="at">${right}</span>` : ""}</div>`;
+        i++;
+      }
+    }
+    if (!rows.length) {
+      const q = input.value.replace(/^[=>@]/, "").trim();
+      html = state.mode === "calc" ? `<div class="empty">Type a sum, like <b>= 12*7+3</b> or <b>= 15% * 240</b>.</div>`
+        : `<div class="empty">No ${state.mode === "win" ? "window" : state.mode === "shell" ? "command" : "app"} named <b>“${esc(q)}”</b>.<br><br>Start with <b>=</b> to calculate, <b>&gt;</b> for shell commands, <b>@</b> for open windows.</div>`;
+    }
+    list.innerHTML = html;
+    paintDetail();
+  }
+
+  function scene(iso, label) {
+    const changed = iso !== lastIso; lastIso = iso;
+    return `<div class="scene">
+      <svg class="floor" viewBox="0 0 400 148" preserveAspectRatio="xMidYMax slice" aria-hidden="true">
+        <defs><pattern id="g" width="40" height="20" patternUnits="userSpaceOnUse"><path d="M0 10 L20 0 L40 10 L20 20 Z" fill="none" stroke="rgba(255,255,255,.05)" stroke-width="1"/></pattern>
+        <radialGradient id="f" cx="50%" cy="85%" r="60%"><stop offset="0" stop-color="#fff" stop-opacity="1"/><stop offset="1" stop-color="#fff" stop-opacity="0"/></radialGradient>
+        <mask id="m"><rect width="400" height="148" fill="url(#f)"/></mask></defs>
+        <rect width="400" height="148" fill="url(#g)" mask="url(#m)"/></svg>
+      <span class="ord">${label}</span>
+      <img class="plinth" src="iso/block.svg" alt="">
+      ${iso ? `<img class="obj${changed ? " drop" : ""}" src="iso/${iso}.svg" alt="">` : ""}</div>`;
+  }
+
+  function paintDetail() {
+    const r = rows[sel];
+    if (!r) { detail.innerHTML = scene("", "EMPTY BAY") + `<div class="desc">Nothing selected.</div>`; return paintFoot(); }
+    let h = "";
+    if (r.kind === "calc") {
+      h = scene(r.iso, "CALCULATE") + `<p class="meta">${esc(r.g)} =</p><div class="big">${esc(r.n)}</div>
+        <div class="desc">${r.v === null ? "Finish the expression to see the result." : "Enter copies the result to the clipboard."}</div>`;
+    } else if (r.kind === "shell") {
+      h = scene(r.iso, "SHELL") + `<div class="who">${icon(r)}<div><h2>${esc(r.n)}</h2><p>${esc(r.g)}</p></div></div><div class="desc">${esc(r.c)}</div>`;
+    } else if (r.kind === "win") {
+      const a = r.app || {};
+      h = scene("desktop", `WORKSPACE ${r.ws}`) + `<div class="who">${icon({ ...a, n: a.n || r.n })}<div><h2>${esc(r.n)}</h2><p>${esc(a.n || "")}</p></div></div>
+        <div class="desc">Enter switches to workspace ${r.ws} and focuses this window.</div>`;
+    } else {
+      const acts = r.act || [];
+      h = scene(isoFor(r), r.g.toUpperCase()) + `<div class="who">${icon(r)}<div><h2>${esc(r.n)}</h2><p>${esc(r.g)}</p></div></div>
+        ${r.c ? `<div class="desc">${esc(r.c)}</div>` : ""}
+        <div class="meta"><span>${r.hits} launches</span><span>Last opened ${agoLong(r.last)}</span>${r.win ? `<span>${r.win} window${r.win > 1 ? "s" : ""} open</span>` : ""}</div>
+        ${acts.length ? `<div class="acts">${acts.map((x, i) => `<button class="act${i === actSel ? " sel" : ""}" data-a="${i}" tabindex="-1">${esc(x)}</button>`).join("")}</div>` : ""}`;
+    }
+    detail.innerHTML = h;
+    paintFoot();
+  }
+
+  function paintFoot() {
+    const r = rows[sel], k = (key, t) => `<span><span class="kc">${key}</span>${t}</span>`;
+    const verb = !r ? "" : r.kind === "calc" ? "Copy" : r.kind === "win" ? "Focus" : r.kind === "shell" ? "Run" : actSel >= 0 ? r.act[actSel] : "Open";
+    foot.innerHTML = (verb ? k("↵", esc(verb)) : "") + (r?.act?.length ? k("→", "Actions") : "") + k("Esc", "Close") + `<span class="tag">TK-421</span>`;
+  }
+
+  function paintSel() {
+    list.querySelectorAll(".row").forEach((el, i) => { el.classList.toggle("sel", i === sel); el.setAttribute("aria-selected", i === sel); });
+    list.querySelector(".row.sel")?.scrollIntoView({ block: "nearest" });
+    actSel = -1; paintDetail();
+  }
+
+  let hudTimer;
+  function hud(text) {
+    $("#hud").innerHTML = text;
+    island.classList.add("hud"); clearTimeout(hudTimer);
+    hudTimer = setTimeout(() => island.classList.remove("hud"), 1400);
+  }
+  function launch(i = sel) {
+    const r = rows[i]; if (!r) return;
+    const label = r.kind === "calc" ? (r.v === null ? null : `Copied <b>${esc(r.n)}</b>`) : r.kind === "win" ? `Workspace <b>${r.ws}</b>`
+      : r.kind === "shell" ? (r.g === "Asks first" ? `<b>${esc(r.n)}</b>? Confirm in the power menu` : `<b>${esc(r.n)}</b>`)
+      : `Opening <b>${esc(actSel >= 0 ? r.act[actSel] : r.n)}</b>`;
+    if (!label) return;
+    close(); setTimeout(() => hud(label), 200);
+  }
+  function open() { island.classList.remove("hud"); root.classList.add("open"); input.value = ""; sel = 0; lastIso = ""; render(); input.focus(); }
+  function close() { root.classList.remove("open"); input.blur(); }
+
+  input.addEventListener("input", () => { sel = 0; render(); list.scrollTop = 0; });
+  list.addEventListener("mousemove", (e) => {   // hover selects only on real pointer movement
+    const p = `${e.clientX},${e.clientY}`, moved = lastPointer !== null && lastPointer !== p; lastPointer = p;
+    const row = e.target.closest(".row"); if (moved && row && +row.dataset.i !== sel) { sel = +row.dataset.i; paintSel(); }
+  });
+  list.addEventListener("click", (e) => { const row = e.target.closest(".row"); if (row) launch(+row.dataset.i); });
+  detail.addEventListener("click", (e) => { const b = e.target.closest(".act"); if (b) { actSel = +b.dataset.a; launch(); } });
+  $("#modes").addEventListener("mousedown", (e) => e.preventDefault());
+  $("#modes").addEventListener("click", (e) => {
+    const b = e.target.closest(".mode"); if (!b) return;
+    const rest = input.value.replace(/^[=>@]/, "");
+    input.value = input.value[0] === b.dataset.p ? rest : b.dataset.p + rest;
+    sel = 0; render(); input.focus();
+  });
+  addEventListener("keydown", (e) => {
+    if (!root.classList.contains("open")) { if (e.key === " ") { e.preventDefault(); open(); } return; }
+    const n = Math.max(rows.length, 1), acts = rows[sel]?.act || [];
+    if (e.key === "Escape") { if (actSel >= 0) { actSel = -1; paintDetail(); } else close(); }
+    else if (e.key === "ArrowDown" || (e.ctrlKey && e.key === "n")) { e.preventDefault(); sel = (sel + 1) % n; paintSel(); }
+    else if (e.key === "ArrowUp" || (e.ctrlKey && e.key === "p")) { e.preventDefault(); sel = (sel - 1 + n) % n; paintSel(); }
+    else if (e.key === "ArrowRight" && acts.length && input.selectionStart === input.value.length) { e.preventDefault(); actSel = Math.min(actSel + 1, acts.length - 1); paintDetail(); }
+    else if (e.key === "ArrowLeft" && actSel >= 0) { e.preventDefault(); actSel--; paintDetail(); }
+    else if (e.key === "Enter") { e.preventDefault(); launch(); }
+  });
+  $("#scrim").addEventListener("click", close);
+  $(".wall").addEventListener("click", () => root.classList.contains("open") || open());
+  const tick = () => { const d = new Date(); $("#clock").textContent = `${String(d.getHours()).padStart(2, "0")}:${String(d.getMinutes()).padStart(2, "0")}`; };
+  tick(); setInterval(tick, 10e3);
+  open();
+  const preset = new URLSearchParams(location.search).get("q");   // review shortcut: island.html?q=%3D12*7
+  if (preset !== null) { input.value = preset; render(); }
+</script>
+</body>
+</html>

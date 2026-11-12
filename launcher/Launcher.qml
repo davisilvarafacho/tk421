@@ -2,6 +2,7 @@ import Quickshell
 import Quickshell.Io
 import Quickshell.Wayland
 import QtQuick
+import QtQuick.Effects
 
 import "../theme"
 import "Fuzzy.js" as Fuzzy
@@ -285,19 +286,48 @@ PanelWindow {
                     Behavior on height { Ease { duration: 180 } }
                 }
 
+                // The app's icon from the active icon theme, drawn grey so the launcher stays hueless (chosen with the
+                // user: "candy grey", prototypes/launcher/index.html). Without an icon the initials tile stays.
                 Rectangle {
                     id: tile
+
+                    readonly property string iconName: row.modelData.entry.icon ?? ""
+                    readonly property string iconSource: iconName === "" ? ""
+                        : iconName.startsWith("/") ? "file://" + iconName
+                        : Quickshell.iconPath(iconName, true)
+                    readonly property bool hasIcon: appIcon.status === Image.Ready
 
                     x: 10
                     anchors.verticalCenter: parent.verticalCenter
                     width: 22
                     height: 22
                     radius: 6
-                    color: row.sel ? win.c.bg : win.c.surfaceAlt
+                    color: hasIcon ? "transparent" : row.sel ? win.c.bg : win.c.surfaceAlt
 
                     Behavior on color { ColorAnimation { duration: 140 } }
 
+                    Image {
+                        id: appIcon
+
+                        anchors.centerIn: parent
+                        width: 20
+                        height: 20
+                        source: tile.iconSource
+                        sourceSize: Qt.size(40, 40)
+                        fillMode: Image.PreserveAspectFit
+                        asynchronous: true
+                        visible: tile.hasIcon
+                        opacity: row.sel ? 1 : 0.62
+                        layer.enabled: visible
+                        layer.effect: MultiEffect {
+                            saturation: -1
+                        }
+
+                        Behavior on opacity { NumberAnimation { duration: 140 } }
+                    }
+
                     Text {
+                        visible: !tile.hasIcon
                         anchors.centerIn: parent
                         text: Fuzzy.initials(row.modelData.name)
                         textFormat: Text.PlainText

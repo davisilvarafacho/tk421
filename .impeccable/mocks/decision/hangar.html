@@ -1,0 +1,62 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8">
+<link href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600&family=Orbitron:wght@500&display=swap" rel="stylesheet">
+<style>
+*{box-sizing:border-box;margin:0}
+html,body{width:1440px;height:900px;overflow:hidden;background:radial-gradient(120% 90% at 70% 30%,#2a2d33,#0b0c0e 70%);font-family:Geist,sans-serif;color:#E8E6E3}
+.bar{position:absolute;top:4px;left:30px;right:30px;display:flex;justify-content:space-between}
+.pill{height:30px;border-radius:15px;background:#000;border:1px solid rgba(255,255,255,.09);padding:0 16px;display:flex;align-items:center;font:500 10px Orbitron;letter-spacing:.2em;color:#8E8B88}
+.island{position:absolute;top:0;left:648px;width:144px;height:38px;background:#000;border-radius:0 0 19px 19px}
+.scrim{position:absolute;inset:0;background:rgba(5,5,5,.35)}
+.card{position:absolute;left:400px;top:198px;width:640px;background:#000;border:1px solid rgba(255,255,255,.09);border-radius:22px;overflow:hidden}
+.search{height:60px;display:flex;align-items:center;gap:14px;padding:0 22px;border-bottom:1px solid rgba(255,255,255,.07)}
+.ds{width:22px;height:22px;border:1.5px solid #E8E6E3;border-radius:50%;position:relative}
+.ds:after{content:"";position:absolute;left:-1px;right:-1px;top:10px;height:1.5px;background:#E8E6E3}
+.q{flex:1;font-size:17px;color:#75737A}
+.caret{display:inline-block;width:1px;height:20px;background:#E8E6E3;vertical-align:middle}
+.tag{font:500 9px Orbitron;letter-spacing:.24em;color:#75737A}
+.lbl{padding:16px 22px 10px;font-size:12px;color:#75737A}
+.bay{display:grid;grid-template-columns:repeat(4,1fr);gap:8px;padding:0 14px}
+.tile{height:112px;border-radius:16px;background:#0D0D10;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:10px;opacity:.55}
+.tile .ic{width:40px;height:40px;border-radius:11px;background:#1A1A21;display:grid;place-items:center;font-weight:600;font-size:14px;color:#8E8B88}
+.tile .n{font-size:13px;color:#8E8B88}
+.tile.on{opacity:1;background:#1A1A21;transform:scale(1.04);box-shadow:inset 0 0 0 1px rgba(255,255,255,.12)}
+.tile.on .ic{background:#000;color:#E8E6E3}
+.tile.on .n{color:#E8E6E3}
+.tile .d{font-size:11px;color:#8E8B88;display:none}
+.tile.on .d{display:block}
+.rows{padding:0 8px 6px}
+.row{height:40px;display:flex;align-items:center;gap:14px;padding:0 14px;border-radius:14px}
+.row .ic{width:22px;height:22px;border-radius:6px;background:#1A1A21;display:grid;place-items:center;font-size:9px;font-weight:600;color:#8E8B88}
+.row .n{font-size:14px;color:#8E8B88}
+.row .g{font-size:12px;color:#75737A}
+.row .t{margin-left:auto;font-size:12px;color:#75737A}
+.rail{display:flex;gap:18px;align-items:center;height:44px;padding:0 22px;border-top:1px solid rgba(255,255,255,.07);font-size:12px;color:#75737A}
+.k{display:inline-grid;place-items:center;min-width:20px;height:20px;padding:0 5px;border-radius:6px;background:#1A1A21;color:#E8E6E3;font-size:11px;margin-right:6px}
+.rail .r{margin-left:auto}
+</style></head><body>
+<div class="bar"><div class="pill">CPU 12% · RAM 31%</div><div class="pill">TRAY · ◔ · ⏻</div></div>
+<div class="island"></div>
+<div class="scrim"></div>
+<div class="card">
+  <div class="search"><div class="ds"></div><div class="q"><span class="caret"></span> Search apps, or = > @</div><div class="tag">TK-421</div></div>
+  <div class="lbl">Frequent</div>
+  <div class="bay">
+    <div class="tile on"><div class="ic">VS</div><div class="n">Visual Studio Code</div><div class="d">Code editor · 412 launches</div></div>
+    <div class="tile"><div class="ic">Vi</div><div class="n">Vivaldi</div></div>
+    <div class="tile"><div class="ic">G</div><div class="n">Ghostty</div></div>
+    <div class="tile"><div class="ic">Sp</div><div class="n">Spotify</div></div>
+    <div class="tile"><div class="ic">Te</div><div class="n">Telegram</div></div>
+    <div class="tile"><div class="ic">Cl</div><div class="n">Claude</div></div>
+    <div class="tile"><div class="ic">Di</div><div class="n">Discord</div></div>
+    <div class="tile"><div class="ic">Ob</div><div class="n">Obsidian</div></div>
+  </div>
+  <div class="lbl">Recent</div>
+  <div class="rows">
+    <div class="row"><div class="ic">Th</div><div class="n">Thunderbird</div><div class="g">Mail client</div><div class="t">12m</div></div>
+    <div class="row"><div class="ic">OB</div><div class="n">OBS Studio</div><div class="g">Screen recorder</div><div class="t">2h</div></div>
+    <div class="row"><div class="ic">St</div><div class="n">Steam</div><div class="g">Game library</div><div class="t">yesterday</div></div>
+  </div>
+  <div class="rail"><span><span class="k">=</span>Calculate</span><span><span class="k">&gt;</span>Shell</span><span><span class="k">@</span>Windows</span><span class="r"><span class="k">↵</span>Launch</span></div>
+</div>
+</body></html>

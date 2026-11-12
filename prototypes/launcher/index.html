@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>TK-421 · Launcher (minimal)</title>
+<title>TK-421 · Launcher (icons)</title>
 <style>
   /* v2, minimal. Removed from v1: title strip, footer key hints, kind column, result counter, coloured icon tiles.
      What stays of TK-421: Imperial palette, 16 px panel radius, a Death Star line icon as the mark, Orbitron command voice, no hue at all, only graphite and steel,
@@ -91,6 +91,22 @@
     transition: color 140ms, background-color 140ms;
   }
   .row.sel .ico { color: var(--text); background: var(--bg); }
+  /* v5 (2026-11-12): the app's own icon from the active icon theme replaces the initials tile; initials stay as the
+     fallback for apps the theme has no icon for. 20 px, no tile behind it. Unselected rows dim the icon like the name;
+     a coloured icon is drawn grey (QML: MultiEffect saturation -1, as bar/TrayIcon.qml does) so the launcher stays hueless. */
+  .ico.pic { background: none; }
+  .ico.pic > * { width: 20px; height: 20px; opacity: 0.62; transition: opacity 140ms; }
+  .row.sel .ico.pic > * { opacity: 1; }
+  .ico.pic img { object-fit: contain; }
+  .ico.pic .mask { background: var(--muted); -webkit-mask: var(--u) center / contain no-repeat; mask: var(--u) center / contain no-repeat; transition: background-color 140ms; }
+  .row.sel .ico.pic .mask { background: var(--text); }
+  .ico.pic .ms { font: 20px/1 "MS"; font-variation-settings: "wght" 300, "FILL" 0, "GRAD" 0, "opsz" 24; color: var(--muted); display: grid; place-items: center; }
+  .row.sel .ico.pic .ms { color: var(--text); }
+  .grey .ico.pic img { filter: grayscale(1); }
+  .themes { position: fixed; top: 10px; right: 16px; display: flex; gap: 2px; padding: 3px; background: #000; border-radius: 15px; border: 1px solid rgba(255,255,255,.09); }
+  .themes button { all: unset; cursor: pointer; padding: 5px 10px; border-radius: 12px; font: 500 9.5px/1 var(--display); letter-spacing: 0.16em; color: var(--muted); }
+  .themes button.on { background: var(--surface-alt); color: var(--text); }
+  @font-face { font-family: "MS"; src: url("file:///usr/share/fonts/TTF/MaterialSymbolsSharp[FILL,GRAD,opsz,wght].ttf"); }
   .name { font-size: 14.5px; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; transition: color 140ms; }
   .row.sel .name { color: var(--text); }
   .name mark { background: none; color: var(--text); font-weight: 600; }
@@ -132,17 +148,52 @@
 
 <div class="status" id="status"></div>
 <div class="hint">↑ ↓ navigate · ↵ open · Esc close · Space reopens</div>
+<div class="themes" id="themes">
+  <button data-t="initials">INITIALS</button>
+  <button data-t="tk421" class="on">TK421</button>
+  <button data-t="circle">MONOTILE ●</button>
+  <button data-t="squircle">MONOTILE ■</button>
+  <button data-t="candy-grey">CANDY · GREY</button>
+  <button data-t="candy">CANDY · COLOUR</button>
+</div>
 
 <script>
-  // Mock data; the real list comes from desktop entries.
+  // The user's installed apps; icons come from the comparison set in ../icon-themes/assets (rows.json).
+  // k = key in that set; no k (HyprFM, Monkeytype) shows the initials fallback.
+  const A = "../icon-themes/assets/";
+  const SET = {
+    vivaldi: { si: "si/vivaldi.svg" }, ghostty: { si: "si/ghostty.svg" }, vscode: { si: "si/visualstudiocode.svg" },
+    spotify: { si: "si/spotify.svg" }, discord: { si: "si/discord.svg" }, telegram: { si: "si/telegram.svg" },
+    claude: { si: "si/claude.svg" }, firefox: { si: "si/firefoxbrowser.svg" }, steam: { si: "si/steam.svg" },
+    obs: { si: "si/obsstudio.svg" }, nvim: { si: "si/neovim.svg" }, localsend: { si: "si/localsend.svg" },
+    thunderbird: { si: "si/thunderbird.svg" }, ghidra: { ms: "bug_report" }, loupe: { ms: "image" }, papers: { ms: "description" },
+  };
+  const FILE = { vivaldi: "vivaldi", ghostty: "com.mitchellh.ghostty", vscode: "vscode", spotify: "spotify-client", discord: "discord",
+    telegram: "org.telegram.desktop", claude: "claude-desktop", firefox: "firefox", steam: "steam", obs: "com.obsproject.Studio",
+    nvim: "nvim", localsend: "localsend", thunderbird: "org.mozilla.Thunderbird", ghidra: "ghidra", loupe: "org.gnome.Loupe", papers: "org.gnome.Papers" };
+  const CANDY = new Set(["vivaldi", "ghostty", "vscode", "spotify", "discord", "telegram", "claude", "firefox", "steam", "obs", "nvim", "localsend", "thunderbird", "ghidra", "loupe"]);
   const APPS = [
-    { n: "Visual Studio Code", g: "VS" }, { n: "Ghostty", g: "G" }, { n: "Firefox", g: "Fx" },
-    { n: "Helium Browser", g: "He" }, { n: "COSMIC Files", g: "F" }, { n: "Loupe", g: "L" },
-    { n: "Neovim", g: "Nv" }, { n: "Monkeytype", g: "Mt" }, { n: "Bloons TD 6", g: "B" },
-    { n: "Brawlhalla", g: "Bh" }, { n: "Left 4 Dead 2", g: "L4" }, { n: "Deep Rock Galactic", g: "DR" },
-    { n: "Blasphemous", g: "Bl" }, { n: "Into the Breach", g: "IB" }, { n: "Steam", g: "St" },
-    { n: "Spotify", g: "Sp" }, { n: "Discord", g: "Di" },
+    { n: "Visual Studio Code", g: "VS", k: "vscode" }, { n: "Vivaldi", g: "Vi", k: "vivaldi" }, { n: "Ghostty", g: "G", k: "ghostty" },
+    { n: "HyprFM", g: "Fm" }, { n: "Spotify", g: "Sp", k: "spotify" }, { n: "Discord", g: "Di", k: "discord" },
+    { n: "Telegram", g: "Te", k: "telegram" }, { n: "Claude", g: "Cl", k: "claude" }, { n: "Firefox", g: "Fx", k: "firefox" },
+    { n: "Thunderbird", g: "Th", k: "thunderbird" }, { n: "OBS Studio", g: "OB", k: "obs" }, { n: "Steam", g: "St", k: "steam" },
+    { n: "Neovim", g: "Nv", k: "nvim" }, { n: "LocalSend", g: "LS", k: "localsend" }, { n: "Ghidra", g: "Gh", k: "ghidra" },
+    { n: "Image Viewer", g: "IV", k: "loupe" }, { n: "Document Viewer", g: "DV", k: "papers" }, { n: "Monkeytype", g: "Mt" },
   ];
+  let theme = "tk421";
+  function icon(a) {
+    const fb = `<div class="ico">${esc(a.g)}</div>`;
+    if (theme === "initials" || !a.k) return fb;
+    if (theme === "tk421") {
+      const s = SET[a.k];
+      if (s?.si) return `<div class="ico pic"><span class="mask" style="--u:url(${A + s.si})"></span></div>`;
+      if (s?.ms) return `<div class="ico pic"><span class="ms">${s.ms}</span></div>`;
+      return fb;
+    }
+    if (theme === "circle" || theme === "squircle") return `<div class="ico pic"><img src="${A}monotile-${theme}/${FILE[a.k]}.png" alt=""></div>`;
+    if (CANDY.has(a.k)) return `<div class="ico pic"><img src="${A}candy/${FILE[a.k]}.svg" alt=""></div>`;
+    return fb;
+  }
 
   const $ = (s) => document.querySelector(s);
   const root = document.body, input = $("#q"), list = $("#list"), status = $("#status");
@@ -175,7 +226,7 @@
     if (!results.length) { list.innerHTML = `<div class="empty">NEGATIVE<span>No program named “${esc(q)}”.</span></div>`; return; }
     list.innerHTML = results.map((r, i) => `
       <div class="row${i === sel ? " sel" : ""}" role="option" data-i="${i}">
-        <div class="ico">${esc(r.a.g)}</div><div class="name">${hl(r.a.n, r.m.idx)}</div><span class="idx">${String(i + 1).padStart(2, "0")}</span>
+        ${icon(r.a)}<div class="name">${hl(r.a.n, r.m.idx)}</div><span class="idx">${String(i + 1).padStart(2, "0")}</span>
       </div>`).join("");
   }
   function paintSel() {
@@ -207,7 +258,14 @@
   $(".wall").addEventListener("click", () => { if (!root.classList.contains("open")) open(); });
   $(".scrim").addEventListener("click", close);
 
-  open(); input.value = "visu"; render();
+  document.querySelectorAll("#themes button").forEach((b) => b.addEventListener("click", (e) => {
+    e.stopPropagation();
+    document.querySelectorAll("#themes button").forEach((x) => x.classList.toggle("on", x === b));
+    theme = b.dataset.t; root.classList.toggle("grey", theme === "candy-grey");
+    render(); input.focus();
+  }));
+
+  open(); render();
 </script>
 </body>
 </html>

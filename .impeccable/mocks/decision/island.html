@@ -1,0 +1,62 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8">
+<link href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600&family=Orbitron:wght@500&display=swap" rel="stylesheet">
+<style>
+*{box-sizing:border-box;margin:0}
+html,body{width:1440px;height:900px;overflow:hidden;background:radial-gradient(120% 90% at 70% 30%,#2a2d33,#0b0c0e 70%);font-family:Geist,sans-serif;color:#E8E6E3}
+.bar{position:absolute;top:4px;left:30px;right:30px;display:flex;justify-content:space-between}
+.pill{height:30px;border-radius:15px;background:#000;border:1px solid rgba(255,255,255,.09);padding:0 16px;display:flex;align-items:center;font:500 10px Orbitron;letter-spacing:.2em;color:#8E8B88}
+.scrim{position:absolute;inset:0;background:rgba(5,5,5,.35)}
+.card{position:absolute;top:0;left:310px;width:820px;height:470px;background:#000;border-radius:0 0 30px 30px;display:flex;flex-direction:column}
+.card:before,.card:after{content:"";position:absolute;top:0;width:20px;height:20px}
+.card:before{left:-20px;background:radial-gradient(circle at 0 100%,transparent 20px,#000 20.5px)}
+.card:after{right:-20px;background:radial-gradient(circle at 100% 100%,transparent 20px,#000 20.5px)}
+.search{height:64px;margin-top:6px;display:flex;align-items:center;gap:14px;padding:0 28px;border-bottom:1px solid rgba(255,255,255,.07)}
+.q{flex:1;font-size:18px}
+.q b{font-weight:600;color:#fff}
+.caret{display:inline-block;width:1px;height:20px;background:#E8E6E3;vertical-align:middle;margin-left:1px}
+.chips{display:flex;gap:6px}
+.chip{padding:5px 9px;border-radius:9px;background:#1A1A21;font-size:11px;color:#8E8B88}
+.body{flex:1;display:grid;grid-template-columns:400px 1fr}
+.list{padding:10px 8px;border-right:1px solid rgba(255,255,255,.07)}
+.row{height:42px;display:flex;align-items:center;gap:14px;padding:0 14px;border-radius:14px}
+.row.on{background:#1A1A21}
+.ic{width:22px;height:22px;border-radius:6px;background:#1A1A21;display:grid;place-items:center;font-size:9px;font-weight:600;color:#8E8B88}
+.row.on .ic{background:#000;color:#E8E6E3}
+.n{font-size:14px;color:#8E8B88}
+.row.on .n{color:#E8E6E3}
+.n b{color:#E8E6E3;font-weight:600}
+.g{margin-left:auto;font-size:12px;color:#75737A}
+.detail{padding:26px 28px;display:flex;flex-direction:column;gap:12px}
+.scene{height:150px;border-radius:16px;background:#0D0D10;position:relative;overflow:hidden}
+.iso{position:absolute;left:50%;top:50%;width:120px;height:120px;transform:translate(-50%,-40%) rotateX(60deg) rotateZ(45deg);background:repeating-linear-gradient(0deg,rgba(255,255,255,.06) 0 1px,transparent 1px 24px),repeating-linear-gradient(90deg,rgba(255,255,255,.06) 0 1px,transparent 1px 24px)}
+.cube{position:absolute;left:50%;top:44%;width:44px;height:44px;transform:translate(-50%,-50%) rotate(45deg);background:#1A1A21;box-shadow:6px 6px 0 #0a0a0c}
+.big{display:flex;align-items:center;gap:14px}
+.big .ic{width:40px;height:40px;border-radius:11px;font-size:14px;color:#E8E6E3}
+.big .t{font-size:18px;font-weight:500}
+.big .s{font-size:12.5px;color:#8E8B88}
+.meta{font-size:12.5px;color:#75737A}
+.acts{display:flex;gap:6px}
+.act{padding:7px 11px;border-radius:10px;background:#1A1A21;font-size:12px}
+</style></head><body>
+<div class="bar"><div class="pill">CPU 12% · RAM 31%</div><div class="pill">TRAY · ◔ · ⏻</div></div>
+<div class="scrim"></div>
+<div class="card">
+  <div class="search"><div class="q">gh<span class="caret"></span></div><div class="chips"><div class="chip">= calc</div><div class="chip">&gt; shell</div><div class="chip">@ windows</div></div></div>
+  <div class="body">
+    <div class="list">
+      <div class="row on"><div class="ic">G</div><div class="n"><b>Gh</b>ostty</div><div class="g">344×</div></div>
+      <div class="row"><div class="ic">Gh</div><div class="n"><b>Gh</b>idra</div><div class="g">6×</div></div>
+      <div class="row"><div class="ic">GH</div><div class="n"><b>G</b>it<b>H</b>ub Desktop</div></div>
+      <div class="row"><div class="ic">Lo</div><div class="n">Lo<b>g</b>s (<b>H</b>yprland)</div></div>
+      <div class="row"><div class="ic">@</div><div class="n">Window: <b>gh</b> pr list — Ghostty</div><div class="g">ws 2</div></div>
+    </div>
+    <div class="detail">
+      <div class="scene"><div class="iso"></div><div class="cube"></div></div>
+      <div class="big"><div class="ic">G</div><div><div class="t">Ghostty</div><div class="s">Terminal emulator</div></div></div>
+      <div class="meta">344 launches · last 4m ago · 2 windows open</div>
+      <div class="acts"><div class="act">New window</div><div class="act">Focus open window</div></div>
+    </div>
+  </div>
+</div>
+</body></html>

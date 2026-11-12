@@ -1,0 +1,225 @@
+[
+ {
+  "label": "Vivaldi",
+  "name": "vivaldi",
+  "orig": "orig/vivaldi.svg",
+  "mt_circle": "monotile-circle/vivaldi.png",
+  "mt_squircle": "monotile-squircle/vivaldi.png",
+  "fit": "fit/vivaldi.svg",
+  "si": "si/vivaldi.svg",
+  "candy": "candy/vivaldi.svg"
+ },
+ {
+  "label": "Ghostty",
+  "name": "com.mitchellh.ghostty",
+  "orig": "orig/com.mitchellh.ghostty.png",
+  "mt_circle": "monotile-circle/com.mitchellh.ghostty.png",
+  "mt_squircle": "monotile-squircle/com.mitchellh.ghostty.png",
+  "fit": "fit/com.mitchellh.ghostty.svg",
+  "si": "si/ghostty.svg",
+  "candy": "candy/com.mitchellh.ghostty.svg"
+ },
+ {
+  "label": "VS Code",
+  "name": "vscode",
+  "orig": "orig/vscode.png",
+  "mt_circle": "monotile-circle/vscode.png",
+  "mt_squircle": "monotile-squircle/vscode.png",
+  "mono": "monochrome/vscode.png",
+  "fit": "fit/vscode.svg",
+  "si": "si/visualstudiocode.svg",
+  "candy": "candy/vscode.svg"
+ },
+ {
+  "label": "Spotify",
+  "name": "spotify-client",
+  "orig": "orig/spotify-client.png",
+  "mt_circle": "monotile-circle/spotify-client.png",
+  "mt_squircle": "monotile-squircle/spotify-client.png",
+  "mono": "monochrome/spotify-client.png",
+  "fit": "fit/spotify-client.svg",
+  "si": "si/spotify.svg",
+  "candy": "candy/spotify-client.svg"
+ },
+ {
+  "label": "Discord",
+  "name": "discord",
+  "orig": "orig/discord.png",
+  "mt_circle": "monotile-circle/discord.png",
+  "mt_squircle": "monotile-squircle/discord.png",
+  "fit": "fit/discord.svg",
+  "si": "si/discord.svg",
+  "candy": "candy/discord.svg"
+ },
+ {
+  "label": "Telegram",
+  "name": "org.telegram.desktop",
+  "orig": "orig/org.telegram.desktop.png",
+  "mt_circle": "monotile-circle/org.telegram.desktop.png",
+  "mt_squircle": "monotile-squircle/org.telegram.desktop.png",
+  "fit": "fit/org.telegram.desktop.svg",
+  "si": "si/telegram.svg",
+  "candy": "candy/org.telegram.desktop.svg"
+ },
+ {
+  "label": "Claude",
+  "name": "claude-desktop",
+  "orig": "orig/claude-desktop.png",
+  "mt_circle": "monotile-circle/claude-desktop.png",
+  "mt_squircle": "monotile-squircle/claude-desktop.png",
+  "si": "si/claude.svg",
+  "candy": "candy/claude-desktop.svg"
+ },
+ {
+  "label": "ChatGPT",
+  "name": "chatgpt",
+  "orig": "orig/chatgpt.png",
+  "mt_circle": "monotile-circle/chatgpt.png",
+  "mt_squircle": "monotile-squircle/chatgpt.png",
+  "mono": "monochrome/chatgpt.png",
+  "si": "si/openai.svg"
+ },
+ {
+  "label": "Firefox",
+  "name": "firefox",
+  "orig": "orig/firefox.svg",
+  "mt_circle": "monotile-circle/firefox.png",
+  "mt_squircle": "monotile-squircle/firefox.png",
+  "fit": "fit/firefox.svg",
+  "si": "si/firefoxbrowser.svg",
+  "candy": "candy/firefox.svg"
+ },
+ {
+  "label": "Thunderbird",
+  "name": "org.mozilla.Thunderbird",
+  "orig": "orig/org.mozilla.Thunderbird.png",
+  "mt_circle": "monotile-circle/org.mozilla.Thunderbird.png",
+  "mt_squircle": "monotile-squircle/org.mozilla.Thunderbird.png",
+  "mono": "monochrome/org.mozilla.Thunderbird.png",
+  "fit": "fit/org.mozilla.Thunderbird.svg",
+  "si": "si/thunderbird.svg",
+  "candy": "candy/org.mozilla.Thunderbird.svg"
+ },
+ {
+  "label": "OBS Studio",
+  "name": "com.obsproject.Studio",
+  "orig": "orig/com.obsproject.Studio.svg",
+  "mt_circle": "monotile-circle/com.obsproject.Studio.png",
+  "mt_squircle": "monotile-squircle/com.obsproject.Studio.png",
+  "fit": "fit/com.obsproject.Studio.svg",
+  "si": "si/obsstudio.svg",
+  "candy": "candy/com.obsproject.Studio.svg"
+ },
+ {
+  "label": "Steam",
+  "name": "steam",
+  "orig": "orig/steam.png",
+  "mt_circle": "monotile-circle/steam.png",
+  "mt_squircle": "monotile-squircle/steam.png",
+  "fit": "fit/steam.svg",
+  "si": "si/steam.svg",
+  "candy": "candy/steam.svg"
+ },
+ {
+  "label": "Neovim",
+  "name": "nvim",
+  "orig": "orig/nvim.png",
+  "mt_circle": "monotile-circle/nvim.png",
+  "mt_squircle": "monotile-squircle/nvim.png",
+  "fit": "fit/nvim.svg",
+  "si": "si/neovim.svg",
+  "candy": "candy/nvim.svg"
+ },
+ {
+  "label": "Helix",
+  "name": "helix",
+  "orig": "orig/helix.png",
+  "mt_circle": "monotile-circle/helix.png",
+  "mt_squircle": "monotile-squircle/helix.png",
+  "si": "si/helix.svg"
+ },
+ {
+  "label": "LocalSend",
+  "name": "localsend",
+  "orig": "orig/localsend.png",
+  "mt_circle": "monotile-circle/localsend.png",
+  "mt_squircle": "monotile-squircle/localsend.png",
+  "fit": "fit/localsend.svg",
+  "si": "si/localsend.svg",
+  "candy": "candy/localsend.svg"
+ },
+ {
+  "label": "AnyDesk",
+  "name": "anydesk",
+  "orig": "orig/anydesk.svg",
+  "mt_circle": "monotile-circle/anydesk.png",
+  "mt_squircle": "monotile-squircle/anydesk.png",
+  "fit": "fit/anydesk.svg",
+  "si": "si/anydesk.svg",
+  "candy": "candy/anydesk.svg"
+ },
+ {
+  "label": "RustDesk",
+  "name": "rustdesk",
+  "orig": "orig/rustdesk.svg",
+  "mt_circle": "monotile-circle/rustdesk.png",
+  "mt_squircle": "monotile-squircle/rustdesk.png",
+  "si": "si/rustdesk.svg"
+ },
+ {
+  "label": "Antigravity",
+  "name": "antigravity",
+  "orig": "orig/antigravity.png",
+  "mt_circle": "monotile-circle/antigravity.png",
+  "mt_squircle": "monotile-squircle/antigravity.png",
+  "ms": "rocket_launch"
+ },
+ {
+  "label": "Ghidra",
+  "name": "ghidra",
+  "orig": "orig/ghidra.png",
+  "mt_circle": "monotile-circle/ghidra.png",
+  "mt_squircle": "monotile-squircle/ghidra.png",
+  "ms": "bug_report",
+  "candy": "candy/ghidra.svg"
+ },
+ {
+  "label": "btop",
+  "name": "btop",
+  "orig": "orig/btop.svg",
+  "mt_circle": "monotile-circle/btop.png",
+  "mt_squircle": "monotile-squircle/btop.png",
+  "mono": "monochrome/btop.png",
+  "fit": "fit/btop.svg",
+  "ms": "monitoring",
+  "candy": "candy/btop.svg"
+ },
+ {
+  "label": "Volume",
+  "name": "org.pulseaudio.pavucontrol",
+  "orig": "orig/org.pulseaudio.pavucontrol.svg",
+  "mt_circle": "monotile-circle/org.pulseaudio.pavucontrol.png",
+  "mt_squircle": "monotile-squircle/org.pulseaudio.pavucontrol.png",
+  "mono": "monochrome/org.pulseaudio.pavucontrol.png",
+  "fit": "fit/org.pulseaudio.pavucontrol.svg",
+  "ms": "volume_up"
+ },
+ {
+  "label": "Imagens",
+  "name": "org.gnome.Loupe",
+  "orig": "orig/org.gnome.Loupe.svg",
+  "mt_circle": "monotile-circle/org.gnome.Loupe.png",
+  "mt_squircle": "monotile-squircle/org.gnome.Loupe.png",
+  "fit": "fit/org.gnome.Loupe.svg",
+  "ms": "image",
+  "candy": "candy/org.gnome.Loupe.svg"
+ },
+ {
+  "label": "Documentos",
+  "name": "org.gnome.Papers",
+  "orig": "orig/org.gnome.Papers.svg",
+  "mt_circle": "monotile-circle/org.gnome.Papers.png",
+  "mt_squircle": "monotile-squircle/org.gnome.Papers.png",
+  "ms": "description"
+ }
+]

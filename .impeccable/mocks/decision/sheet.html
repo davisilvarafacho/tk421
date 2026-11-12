@@ -1,0 +1,56 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8">
+<link href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600&family=Orbitron:wght@500&display=swap" rel="stylesheet">
+<style>
+*{box-sizing:border-box;margin:0}
+html,body{width:1440px;height:900px;overflow:hidden;background:radial-gradient(120% 90% at 70% 30%,#2a2d33,#0b0c0e 70%);font-family:Geist,sans-serif;color:#E8E6E3}
+.bar{position:absolute;top:4px;left:30px;right:30px;display:flex;justify-content:space-between}
+.pill{height:30px;border-radius:15px;background:#000;border:1px solid rgba(255,255,255,.09);padding:0 16px;display:flex;align-items:center;font:500 10px Orbitron;letter-spacing:.2em;color:#8E8B88}
+.island{position:absolute;top:0;left:648px;width:144px;height:38px;background:#000;border-radius:0 0 19px 19px}
+.sheet{position:absolute;left:30px;top:42px;bottom:30px;width:440px;background:#000;border:1px solid rgba(255,255,255,.09);border-radius:22px;overflow:hidden;display:flex;flex-direction:column}
+.head{padding:18px 22px 0}
+.title{font:500 11px Orbitron;letter-spacing:.24em;color:#E8E6E3}
+.tabs{display:flex;gap:4px;margin-top:14px}
+.tab{padding:7px 12px;border-radius:12px;font-size:12px;color:#75737A}
+.tab.on{background:#1A1A21;color:#E8E6E3}
+.search{margin:12px 14px 6px;height:44px;border-radius:14px;background:#0D0D10;display:flex;align-items:center;padding:0 14px;gap:10px;font-size:15px}
+.caret{display:inline-block;width:1px;height:18px;background:#E8E6E3}
+.sec{padding:14px 22px 6px;font-size:12px;color:#75737A}
+.row{height:40px;display:flex;align-items:center;gap:14px;margin:0 8px;padding:0 14px;border-radius:14px}
+.ic{width:22px;height:22px;border-radius:6px;background:#1A1A21;display:grid;place-items:center;font-size:9px;font-weight:600;color:#8E8B88}
+.n{font-size:14px;color:#8E8B88}
+.t{margin-left:auto;font-size:12px;color:#75737A}
+.open{margin:2px 8px;padding:12px 14px 14px;border-radius:14px;background:#1A1A21}
+.open .top{display:flex;align-items:center;gap:14px}
+.open .n{color:#fff;font-weight:500}
+.open .ic{background:#000;color:#E8E6E3}
+.desc{margin:8px 0 10px 36px;font-size:12.5px;color:#8E8B88;line-height:1.45}
+.acts{margin-left:36px;display:flex;gap:6px}
+.act{padding:6px 10px;border-radius:10px;background:#000;font-size:12px;color:#E8E6E3}
+.foot{margin-top:auto;height:44px;border-top:1px solid rgba(255,255,255,.07);display:flex;align-items:center;gap:16px;padding:0 22px;font-size:12px;color:#75737A}
+.k{display:inline-grid;place-items:center;min-width:20px;height:20px;padding:0 5px;border-radius:6px;background:#1A1A21;color:#E8E6E3;font-size:11px;margin-right:6px}
+</style></head><body>
+<div class="bar"><div class="pill">CPU 12% · RAM 31%</div><div class="pill">TRAY · ◔ · ⏻</div></div>
+<div class="island"></div>
+<div class="sheet">
+  <div class="head"><div class="title">LAUNCH</div>
+    <div class="tabs"><div class="tab on">Apps</div><div class="tab">Windows</div><div class="tab">Shell</div><div class="tab">Calculate</div></div></div>
+  <div class="search"><span class="caret"></span><span style="color:#75737A">Search apps</span></div>
+  <div class="sec">Frequent</div>
+  <div class="open"><div class="top"><div class="ic">VS</div><div class="n">Visual Studio Code</div><div class="t" style="color:#8E8B88">412 launches</div></div>
+    <div class="desc">Code editing. Redefined. Opens the last folder you worked in.</div>
+    <div class="acts"><div class="act">New window</div><div class="act">New empty window</div></div></div>
+  <div class="row"><div class="ic">Vi</div><div class="n">Vivaldi</div><div class="t">380</div></div>
+  <div class="row"><div class="ic">G</div><div class="n">Ghostty</div><div class="t">344</div></div>
+  <div class="row"><div class="ic">Sp</div><div class="n">Spotify</div><div class="t">201</div></div>
+  <div class="sec">Recent</div>
+  <div class="row"><div class="ic">Th</div><div class="n">Thunderbird</div><div class="t">12m</div></div>
+  <div class="row"><div class="ic">OB</div><div class="n">OBS Studio</div><div class="t">2h</div></div>
+  <div class="row"><div class="ic">St</div><div class="n">Steam</div><div class="t">yesterday</div></div>
+  <div class="sec">All</div>
+  <div class="row"><div class="ic">Cl</div><div class="n">Claude</div></div>
+  <div class="row"><div class="ic">Di</div><div class="n">Discord</div></div>
+  <div class="row"><div class="ic">Dv</div><div class="n">Document Viewer</div></div>
+  <div class="foot"><span><span class="k">Tab</span>Mode</span><span><span class="k">→</span>Actions</span><span style="margin-left:auto"><span class="k">↵</span>Launch</span></div>
+</div>
+</body></html>

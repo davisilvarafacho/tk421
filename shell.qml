@@ -1,3 +1,4 @@
+//@ pragma IconTheme candy-icons
 import Quickshell
 import QtQuick
 import "bar"
