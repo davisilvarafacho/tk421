@@ -8,83 +8,25 @@ import "soundlogic.js" as Logic
 
 // Quick sound panel: volume of the default output and input, and the devices to switch the default to.
 // (The full sound manager, with enabling and disabling devices, is a later step.) State: services/Sound.qml.
-// Segmented power-cell gauge, framed icons and status words (prototype: prototypes/sound-flyout/index.html).
+// It hangs from the toolbar pill in the comms log language: Orbitron only for the title, Geist sentence case, a slim
+// slider per direction, quiet device rows with a hover fill and a check on the device in use.
 Item {
     id: panel
 
     readonly property var c: Theme.imperial
-    readonly property color accentText: "#8EA6D4"      // the accent tinted for small text (~7:1 on the surface)
-    readonly property color cellOff: "#26252A"
-    readonly property color cellMuted: "#4A494E"
-    readonly property int cells: 22
 
-    readonly property real bodyHeight: Math.min(column.implicitHeight, 440)
+    readonly property real bodyHeight: Math.min(column.implicitHeight, 460)
 
-    implicitHeight: 48 + bodyHeight + 8
+    implicitHeight: body.y + bodyHeight + 10
 
-    Text {
-        x: 16
-        y: 2 + (46 - height) / 2
-        text: "Sound"
-        color: panel.c.text
-        renderType: Text.CurveRendering
-        font.family: Theme.displayFont
-        font.pixelSize: 11
-        font.letterSpacing: 2.2
-        font.capitalization: Font.AllUppercase
+    PanelHeader {
+        x: 22
+        y: 16
+        width: parent.width - 44
+        title: "Sound"
     }
 
-    // Section label, a hairline that runs to the status word on the right edge.
-    component Section: Item {
-        id: section
-
-        property string label: ""
-        property string status: ""
-        property color statusColor: panel.c.muted
-
-        width: column.width
-        height: 28
-
-        Text {
-            id: sectionLabel
-
-            x: 16
-            anchors.verticalCenter: parent.verticalCenter
-            anchors.verticalCenterOffset: section.height > 30 ? 9 : 3
-            text: section.label
-            color: panel.c.muted
-            renderType: Text.CurveRendering
-            font.family: Theme.displayFont
-            font.pixelSize: 9
-            font.letterSpacing: 1.8
-            font.capitalization: Font.AllUppercase
-        }
-
-        Text {
-            id: sectionStatus
-
-            x: parent.width - 16 - implicitWidth
-            anchors.verticalCenter: sectionLabel.verticalCenter
-            text: section.status
-            color: section.statusColor
-            renderType: Text.CurveRendering
-            font.family: Theme.displayFont
-            font.pixelSize: 9
-            font.letterSpacing: 1.5
-            font.capitalization: Font.AllUppercase
-        }
-
-        Rectangle {
-            x: 16 + sectionLabel.implicitWidth + 10
-            anchors.verticalCenter: sectionLabel.verticalCenter
-            width: sectionStatus.x - 10 - x
-            height: 1
-            color: panel.c.border
-            opacity: 0.7
-        }
-    }
-
-    // Framed mute button, a segmented gauge you can drag (hover previews the level), and the readout.
+    // Mute button, a slider you can drag (hover previews the level) and the readout.
     component VolumeRow: Item {
         id: vr
 
@@ -93,27 +35,26 @@ Item {
         property bool muted: false
         property string glyph: ""
 
+        readonly property real level: Math.max(0, Math.min(1, value))
+
         width: column.width
         height: 40
 
         Rectangle {
-            id: muteButton
-
-            x: 16
+            x: 4
             anchors.verticalCenter: parent.verticalCenter
-            width: 26
-            height: 26
-            radius: 3
-            color: "transparent"
-            border.width: 1
-            border.color: vr.muted ? panel.c.danger : (muteArea.containsMouse ? panel.c.muted : panel.c.border)
+            width: 32
+            height: 32
+            radius: 9
+            color: muteArea.containsMouse ? Theme.imperial.surfaceAlt : "transparent"
+
+            Behavior on color { ColorAnimation { duration: 120 } }
 
             Icon {
                 anchors.centerIn: parent
                 name: vr.glyph
                 size: Theme.iconSize.panel
-                color: vr.muted ? panel.c.dangerText : (muteArea.containsMouse ? panel.c.text : panel.c.muted)
-                gapColor: panel.c.surface
+                color: muteArea.containsMouse ? Theme.imperial.text : Theme.imperial.muted
             }
 
             MouseArea {
@@ -127,40 +68,42 @@ Item {
         }
 
         Item {
-            id: gauge
+            id: slider
 
-            readonly property int lit: Math.round(Math.max(0, Math.min(1, vr.value)) * panel.cells)
-            readonly property int ghost: gaugeArea.containsMouse && !gaugeArea.pressed
-                ? Math.round(Math.max(0, Math.min(1, gaugeArea.mouseX / width)) * panel.cells) : 0
-            readonly property real step: width / panel.cells
+            readonly property real ghost: sliderArea.containsMouse && !sliderArea.pressed
+                ? Math.max(0, Math.min(1, sliderArea.mouseX / width)) : 0
 
-            x: 16 + 26 + 12
-            width: parent.width - x - 12 - 46 - 16
+            x: 40
+            width: parent.width - x - 12 - 52
             height: parent.height
 
-            Repeater {
-                model: panel.cells
+            Rectangle {
+                anchors.verticalCenter: parent.verticalCenter
+                width: parent.width
+                height: 4
+                radius: 2
+                color: Theme.imperial.surfaceAlt
+            }
 
-                delegate: Rectangle {
-                    id: cell
+            // Hover preview, under the fill.
+            Rectangle {
+                anchors.verticalCenter: parent.verticalCenter
+                width: Math.round(parent.width * slider.ghost)
+                height: 4
+                radius: 2
+                color: Qt.rgba(0.91, 0.9, 0.89, 0.22)
+            }
 
-                    required property int index
-                    readonly property bool on: index < gauge.lit
-                    readonly property bool lead: on && index === gauge.lit - 1
-
-                    // Pixel-snapped so every cell stays crisp.
-                    x: Math.round(index * gauge.step)
-                    width: Math.round((index + 1) * gauge.step) - x - 2
-                    anchors.verticalCenter: parent.verticalCenter
-                    height: 12
-                    radius: 1
-                    color: on ? (vr.muted ? panel.cellMuted : (lead ? panel.c.accent : panel.c.text))
-                        : (index < gauge.ghost ? Qt.rgba(0.91, 0.9, 0.89, 0.28) : panel.cellOff)
-                }
+            Rectangle {
+                anchors.verticalCenter: parent.verticalCenter
+                width: Math.round(parent.width * vr.level)
+                height: 4
+                radius: 2
+                color: vr.muted ? Theme.imperial.faint : Theme.imperial.text
             }
 
             MouseArea {
-                id: gaugeArea
+                id: sliderArea
 
                 anchors.fill: parent
                 hoverEnabled: true
@@ -170,27 +113,25 @@ Item {
                     if (pressed)
                         Sound.setVolume(vr.kind, mouse.x / width)
                 }
+                // WheelHandler never fires in a Quickshell window here: the wheel is read by MouseArea (5% a notch).
+                onWheel: wheel => Sound.setVolume(vr.kind, Math.max(0, Math.min(1, vr.level + (wheel.angleDelta.y > 0 ? 0.05 : -0.05))))
             }
         }
 
         Text {
-            x: parent.width - 16 - implicitWidth
+            anchors.right: parent.right
+            anchors.rightMargin: 12
             anchors.verticalCenter: parent.verticalCenter
-            anchors.verticalCenterOffset: 1
-            textFormat: Text.RichText
-            text: vr.muted ? "MUTE"
-                : Math.round(Math.max(0, Math.min(1, vr.value)) * 100)
-                    + "<span style=\"font-size:9px; color:" + panel.c.muted + "\">%</span>"
-            color: vr.muted ? panel.c.dangerText : panel.c.text
+            text: vr.muted ? "Muted" : Math.round(vr.level * 100) + "%"
+            color: vr.muted ? Theme.imperial.dangerText : Theme.imperial.text
             renderType: Text.CurveRendering
-            font.family: Theme.displayFont
-            font.pixelSize: vr.muted ? 11 : 13
-            font.letterSpacing: vr.muted ? 1.5 : 0
-            font.weight: Font.Medium
+            font.family: Theme.fontFamily
+            font.pixelSize: 13
+            font.features: { "tnum": 1 }
         }
     }
 
-    // Framed icon, name, and an ACTIVE word on the current device.
+    // Icon, name and detail; the device in use is in full white with a check.
     component DeviceRow: Item {
         id: dr
 
@@ -198,53 +139,39 @@ Item {
         property string kind: "out"
 
         width: column.width
-        height: 48
+        height: 44
 
         Rectangle {
             anchors.fill: parent
-            color: Qt.rgba(0.91, 0.9, 0.89, 0.035)
-            opacity: area.containsMouse ? 1 : 0
+            radius: 14
+            color: area.containsMouse ? Theme.imperial.rowHover : "transparent"
 
-            Behavior on opacity {
-                NumberAnimation { duration: 120 }
-            }
+            Behavior on color { ColorAnimation { duration: 120 } }
         }
 
-        Rectangle {
-            id: frame
-
-            x: 16
+        Icon {
+            x: 12
             anchors.verticalCenter: parent.verticalCenter
-            width: 30
-            height: 30
-            radius: 3
-            color: dr.modelData.current ? panel.c.accentDim : "transparent"
-            border.width: 1
-            border.color: dr.modelData.current ? panel.c.accent : (area.containsMouse ? panel.c.muted : panel.c.border)
-
-            Icon {
-                anchors.centerIn: parent
-                name: dr.modelData.glyph
-                size: Theme.iconSize.panel
-                color: dr.modelData.current || area.containsMouse ? panel.c.text : panel.c.muted
-            }
+            name: dr.modelData.glyph
+            size: Theme.iconSize.panel
+            color: dr.modelData.current || area.containsMouse ? Theme.imperial.text : Theme.imperial.muted
         }
 
         Column {
-            x: 16 + 30 + 12
+            x: 40
             anchors.verticalCenter: parent.verticalCenter
-            width: parent.width - x - 16 - (dr.modelData.current ? activeTag.implicitWidth + 12 : 0)
+            width: parent.width - x - 12 - (dr.modelData.current ? 16 + 12 : 0)
 
             Text {
                 width: parent.width
                 text: dr.modelData.name
                 textFormat: Text.PlainText
                 elide: Text.ElideRight
-                color: panel.c.text
+                color: dr.modelData.current || area.containsMouse ? Theme.imperial.text : Theme.imperial.muted
                 renderType: Text.CurveRendering
                 font.family: Theme.fontFamily
                 font.pixelSize: 13
-                font.weight: Font.Medium
+                font.weight: dr.modelData.current ? Font.Medium : Font.Normal
             }
 
             Text {
@@ -253,26 +180,21 @@ Item {
                 text: dr.modelData.sub
                 textFormat: Text.PlainText
                 elide: Text.ElideRight
-                color: panel.c.muted
+                color: Theme.imperial.faint
                 renderType: Text.CurveRendering
                 font.family: Theme.fontFamily
                 font.pixelSize: 11
             }
         }
 
-        Text {
-            id: activeTag
-
+        Icon {
             visible: dr.modelData.current
-            x: parent.width - 16 - implicitWidth
+            anchors.right: parent.right
+            anchors.rightMargin: 12
             anchors.verticalCenter: parent.verticalCenter
-            text: "Active"
-            color: panel.accentText
-            renderType: Text.CurveRendering
-            font.family: Theme.displayFont
-            font.pixelSize: 9
-            font.letterSpacing: 1.6
-            font.capitalization: Font.AllUppercase
+            name: "check"
+            size: Theme.iconSize.panel
+            color: Theme.imperial.text
         }
 
         MouseArea {
@@ -286,8 +208,11 @@ Item {
     }
 
     Flickable {
-        y: 48
-        width: parent.width
+        id: body
+
+        x: 10
+        y: 16 + 28 + 2
+        width: parent.width - 20
         height: panel.bodyHeight
         contentHeight: column.implicitHeight
         clip: true
@@ -299,11 +224,10 @@ Item {
 
             width: parent.width
 
-            Section {
+            PanelSection {
+                width: column.width
                 label: "Output"
-                status: Sound.outMuted ? "Muted"
-                    : Sound.outputs.length + (Sound.outputs.length === 1 ? " device" : " devices")
-                statusColor: Sound.outMuted ? panel.c.dangerText : panel.c.muted
+                status: Sound.outputs.length + (Sound.outputs.length === 1 ? " device" : " devices")
             }
 
             VolumeRow {
@@ -319,12 +243,12 @@ Item {
                 delegate: DeviceRow { kind: "out" }
             }
 
-            Section {
-                height: 40
+            PanelSection {
+                width: column.width
+                implicitHeight: 38
                 label: "Input"
-                status: Sound.micState === "on" ? "Live" : Sound.micState === "muted" ? "Muted" : "No signal"
-                statusColor: Sound.micState === "on" ? panel.accentText
-                    : Sound.micState === "muted" ? panel.c.dangerText : panel.c.muted
+                status: Sound.micState === "on" ? "Live" : Sound.micState === "muted" ? "" : "None"
+                statusColor: Sound.micState === "on" ? panel.c.muted : panel.c.faint
             }
 
             VolumeRow {
@@ -344,18 +268,15 @@ Item {
 
             Text {
                 visible: Sound.inputs.length === 0
-                x: 16
-                topPadding: 2
-                bottomPadding: 10
-                text: "No input device recognised."
+                x: 40
+                topPadding: 4
+                bottomPadding: 8
+                text: "No input device."
                 color: panel.c.muted
-                opacity: 0.75
                 renderType: Text.CurveRendering
                 font.family: Theme.fontFamily
                 font.pixelSize: 12
             }
-
-            Item { width: 1; height: 6 }
         }
     }
 }

@@ -7,44 +7,37 @@ import "../theme"
 import "netlogic.js" as Logic
 
 // Network dropdown: the current connection (name, speed, address, live rates), Connect/Disconnect, and the Wi-Fi networks
-// in range with a password prompt for secured ones. State: services/Net.qml. Prototype: prototypes/toolbar/index.html.
+// in range with a password prompt for secured ones. State: services/Net.qml.
+// It hangs from the toolbar pill in the comms log language: Orbitron only for the title, Geist sentence case, quiet rows.
 Item {
     id: panel
 
     readonly property var c: Theme.imperial
 
     property string joining: ""         // id of the secured network whose password field is open
+    // Cutting the live link (it can drop a remote session) takes two clicks: the first arms it ("eth" or a Wi-Fi id)
+    // and turns the control red; it disarms by itself after 3 s.
+    property string armed: ""
 
-    readonly property real bodyHeight: Math.min(column.implicitHeight, 420)
-
-    implicitHeight: 48 + bodyHeight + 10
-
-    Text {
-        id: title
-
-        x: 16
-        y: 2 + (46 - height) / 2
-        text: "Network"
-        color: panel.c.text
-        renderType: Text.CurveRendering
-        font.family: Theme.displayFont
-        font.pixelSize: 11
-        font.letterSpacing: 2.2
-        font.capitalization: Font.AllUppercase
+    Timer {
+        running: panel.armed !== ""
+        interval: 3000
+        onTriggered: panel.armed = ""
     }
 
-    Text {
-        x: title.x + title.implicitWidth + 8
-        y: title.y
-        height: title.height
-        verticalAlignment: Text.AlignVCenter
-        text: Net.connected ? "Connected" : "Not connected"
-        color: panel.c.muted
-        renderType: Text.CurveRendering
-        font.family: Theme.fontFamily
-        font.pixelSize: 11
+    readonly property real bodyHeight: Math.min(column.implicitHeight, 440)
+
+    implicitHeight: body.y + bodyHeight + 10
+
+    PanelHeader {
+        x: 22
+        y: 16
+        width: parent.width - 44
+        title: "Network"
+        detail: Net.connected ? "Connected" : "Not connected"
     }
 
+    // A label and a value, aligned with the text column.
     component Kv: Item {
         id: kv
 
@@ -52,34 +45,38 @@ Item {
         property string value: ""
 
         width: column.width
-        height: 24
+        height: 22
 
         Text {
-            x: 16
+            x: 40
             anchors.verticalCenter: parent.verticalCenter
             text: kv.label
-            color: panel.c.muted
+            color: Theme.imperial.faint
             renderType: Text.CurveRendering
             font.family: Theme.fontFamily
             font.pixelSize: 12
         }
 
         Text {
-            x: parent.width - 16 - implicitWidth
+            anchors.right: parent.right
+            anchors.rightMargin: 12
             anchors.verticalCenter: parent.verticalCenter
-            anchors.verticalCenterOffset: 1
             text: kv.value
             textFormat: Text.PlainText
-            color: panel.c.text
+            color: Theme.imperial.text
             renderType: Text.CurveRendering
-            font.family: Theme.displayFont
-            font.pixelSize: 11
+            font.family: Theme.fontFamily
+            font.pixelSize: 12
+            font.features: { "tnum": 1 }
         }
     }
 
     Flickable {
-        y: 48
-        width: parent.width
+        id: body
+
+        x: 10
+        y: 16 + 28 + 6
+        width: parent.width - 20
         height: panel.bodyHeight
         contentHeight: column.implicitHeight
         clip: true
@@ -94,27 +91,27 @@ Item {
             // ---- the current connection ----
             Item {
                 width: column.width
-                height: 62
+                height: 48
 
                 Icon {
-                    x: 16
+                    x: 12
                     anchors.verticalCenter: parent.verticalCenter
                     name: Net.mode === "eth" ? "lan" : Net.mode === "wifi" ? "wifi" : Net.hasWifi ? "wifi_off" : "lan"
                     color: Net.connected ? panel.c.text : panel.c.muted
-                    size: Theme.iconSize.hero
+                    size: Theme.iconSize.panel
                 }
 
                 Column {
-                    x: 56
+                    x: 40
                     anchors.verticalCenter: parent.verticalCenter
-                    width: parent.width - 56 - 16
+                    width: parent.width - x - 12
 
                     Text {
                         width: parent.width
                         text: Net.title
                         textFormat: Text.PlainText
                         elide: Text.ElideRight
-                        color: panel.c.text
+                        color: Net.connected ? panel.c.text : panel.c.muted
                         renderType: Text.CurveRendering
                         font.family: Theme.fontFamily
                         font.pixelSize: 14
@@ -134,9 +131,9 @@ Item {
                 }
             }
 
-            Kv { visible: Net.connected && Net.ipv4 !== ""; height: visible ? 24 : 0; label: "IPv4"; value: Net.ipv4 }
-            Kv { visible: Net.connected; height: visible ? 24 : 0; label: "Down"; value: Logic.formatRate(Net.rxRate) }
-            Kv { visible: Net.connected; height: visible ? 24 : 0; label: "Up"; value: Logic.formatRate(Net.txRate) }
+            Kv { visible: Net.connected && Net.ipv4 !== ""; height: visible ? 22 : 0; label: "IPv4"; value: Net.ipv4 }
+            Kv { visible: Net.connected; height: visible ? 22 : 0; label: "Down"; value: Logic.formatRate(Net.rxRate) }
+            Kv { visible: Net.connected; height: visible ? 22 : 0; label: "Up"; value: Logic.formatRate(Net.txRate) }
 
             // Connect / Disconnect (the wired connection; Wi-Fi networks have their own rows).
             Item {
@@ -144,32 +141,32 @@ Item {
                 width: column.width
                 height: visible ? 44 : 0
 
-                ActionButton {
-                    x: 8
+                PanelButton {
+                    x: 30
                     anchors.verticalCenter: parent.verticalCenter
-                    text: Net.connected ? "Disconnect" : "Connect"
-                    onClicked: Net.connected ? Net.disconnect() : Net.connect()
+                    anchors.verticalCenterOffset: 2
+                    text: !Net.connected ? "Connect" : panel.armed === "eth" ? "Disconnect?" : "Disconnect"
+                    primary: !Net.connected
+                    danger: Net.connected && panel.armed === "eth"
+                    onClicked: {
+                        if (!Net.connected)
+                            Net.connect()
+                        else if (panel.armed !== "eth")
+                            panel.armed = "eth"
+                        else {
+                            panel.armed = ""
+                            Net.disconnect()
+                        }
+                    }
                 }
             }
 
             // ---- Wi-Fi ----
-            Item {
+            PanelSection {
                 visible: Net.hasWifi
                 width: column.width
-                height: visible ? 28 : 0
-
-                Text {
-                    x: 16
-                    anchors.verticalCenter: parent.verticalCenter
-                    anchors.verticalCenterOffset: 6
-                    text: "Available networks"
-                    color: panel.c.muted
-                    renderType: Text.CurveRendering
-                    font.family: Theme.displayFont
-                    font.pixelSize: 9
-                    font.letterSpacing: 1.8
-                    font.capitalization: Font.AllUppercase
-                }
+                implicitHeight: visible ? 32 : 0
+                label: "Available networks"
             }
 
             Repeater {
@@ -186,22 +183,21 @@ Item {
 
                     Item {
                         width: parent.width
-                        height: 40
+                        height: 44
 
                         Rectangle {
                             anchors.fill: parent
-                            color: Qt.rgba(0.91, 0.9, 0.89, 0.035)
-                            opacity: rowArea.containsMouse ? 1 : 0
+                            radius: 14
+                            color: rowArea.containsMouse || wifiRow.asking ? panel.c.rowHover : "transparent"
 
-                            Behavior on opacity {
-                                NumberAnimation { duration: 120 }
-                            }
+                            Behavior on color { ColorAnimation { duration: 120 } }
                         }
 
                         // Signal bars.
                         Row {
-                            x: 16
+                            x: 13
                             anchors.verticalCenter: parent.verticalCenter
+                            anchors.verticalCenterOffset: 1
                             spacing: 1.5
 
                             Repeater {
@@ -213,77 +209,63 @@ Item {
                                     anchors.bottom: parent.bottom
                                     width: 2.5
                                     height: 4 + index * 3
+                                    radius: 0.5
                                     color: panel.c.text
-                                    opacity: index < Logic.signalBars(wifiRow.modelData.strength) ? 1 : 0.25
+                                    opacity: index < Logic.signalBars(wifiRow.modelData.strength) ? 1 : 0.3
                                 }
                             }
                         }
 
                         Column {
-                            x: 46
+                            x: 40
                             anchors.verticalCenter: parent.verticalCenter
-                            width: parent.width - 46 - 70
+                            width: parent.width - x - 12 - 90
 
-                            Row {
-                                spacing: 6
-
-                                Rectangle {
-                                    visible: wifiRow.modelData.connected
-                                    anchors.verticalCenter: parent.verticalCenter
-                                    width: 5
-                                    height: 5
-                                    radius: 2.5
-                                    color: panel.c.accent
-                                }
-
-                                Text {
-                                    text: wifiRow.modelData.name
-                                    textFormat: Text.PlainText
-                                    elide: Text.ElideRight
-                                    width: Math.min(implicitWidth, 190)
-                                    color: panel.c.text
-                                    renderType: Text.CurveRendering
-                                    font.family: Theme.fontFamily
-                                    font.pixelSize: 13
-                                    font.weight: Font.Medium
-                                }
+                            Text {
+                                width: parent.width
+                                text: wifiRow.modelData.name
+                                textFormat: Text.PlainText
+                                elide: Text.ElideRight
+                                color: wifiRow.modelData.connected || rowArea.containsMouse ? panel.c.text : panel.c.muted
+                                renderType: Text.CurveRendering
+                                font.family: Theme.fontFamily
+                                font.pixelSize: 13
+                                font.weight: wifiRow.modelData.connected ? Font.Medium : Font.Normal
                             }
 
                             Text {
                                 text: wifiRow.modelData.busy ? "Connecting…" : wifiRow.modelData.connected ? "Connected" : wifiRow.modelData.known ? "Saved" : wifiRow.modelData.secure ? "Secured" : "Open"
-                                color: panel.c.muted
+                                color: panel.c.faint
                                 renderType: Text.CurveRendering
                                 font.family: Theme.fontFamily
                                 font.pixelSize: 11
                             }
                         }
 
+                        // At rest: a lock on secured networks. On hover: what a click does.
                         Icon {
-                            visible: wifiRow.modelData.secure
-                            x: parent.width - 16 - implicitWidth
+                            visible: wifiRow.modelData.secure && !rowArea.containsMouse
+                            anchors.right: parent.right
+                            anchors.rightMargin: 12
                             anchors.verticalCenter: parent.verticalCenter
                             name: "lock"
-                            color: panel.c.muted
+                            color: panel.c.faint
                             size: Theme.iconSize.panel
                         }
 
                         Text {
-                            x: parent.width - 36 - implicitWidth
-                            anchors.verticalCenter: parent.verticalCenter
-                            anchors.verticalCenterOffset: 1
-                            text: wifiRow.modelData.connected ? "Disconnect" : "Connect"
-                            visible: !wifiRow.modelData.secure || wifiRow.modelData.connected || wifiRow.modelData.known
-                            opacity: rowArea.containsMouse && !wifiRow.modelData.busy ? 1 : 0
-                            color: panel.c.muted
-                            renderType: Text.CurveRendering
-                            font.family: Theme.displayFont
-                            font.pixelSize: 9
-                            font.letterSpacing: 1.4
-                            font.capitalization: Font.AllUppercase
+                            readonly property bool armed: panel.armed === wifiRow.modelData.id
 
-                            Behavior on opacity {
-                                NumberAnimation { duration: 140 }
-                            }
+                            visible: (rowArea.containsMouse || armed) && !wifiRow.modelData.busy
+                            anchors.right: parent.right
+                            anchors.rightMargin: 12
+                            anchors.verticalCenter: parent.verticalCenter
+                            text: wifiRow.modelData.connected ? (armed ? "Disconnect?" : "Disconnect")
+                                : wifiRow.modelData.secure && !wifiRow.modelData.known ? "Enter password" : "Connect"
+                            color: armed ? panel.c.dangerText : panel.c.muted
+                            renderType: Text.CurveRendering
+                            font.family: Theme.fontFamily
+                            font.pixelSize: 11
                         }
 
                         MouseArea {
@@ -297,8 +279,12 @@ Item {
                                 const n = wifiRow.modelData
                                 if (n.secure && !n.connected && !n.known)
                                     panel.joining = panel.joining === n.id ? "" : n.id
-                                else
+                                else if (n.connected && panel.armed !== n.id)
+                                    panel.armed = n.id
+                                else {
+                                    panel.armed = ""
                                     Net.toggleWifiNetwork(n.id)
+                                }
                             }
                         }
                     }
@@ -307,24 +293,24 @@ Item {
                     Item {
                         visible: wifiRow.asking
                         width: parent.width
-                        height: visible ? 44 : 0
+                        height: visible ? 46 : 0
 
                         Rectangle {
-                            x: 46
+                            x: 40
                             anchors.bottom: parent.bottom
-                            anchors.bottomMargin: 8
-                            width: parent.width - 46 - 16 - 64
+                            anchors.bottomMargin: 10
+                            width: parent.width - x - 12 - 64
                             height: 1
-                            color: input.activeFocus ? panel.c.accent : panel.c.border
+                            color: input.activeFocus ? panel.c.muted : panel.c.surfaceAlt
                         }
 
                         TextInput {
                             id: input
 
-                            x: 46
+                            x: 40
                             anchors.bottom: parent.bottom
-                            anchors.bottomMargin: 10
-                            width: parent.width - 46 - 16 - 64
+                            anchors.bottomMargin: 14
+                            width: parent.width - x - 12 - 64
                             echoMode: TextInput.Password
                             color: panel.c.text
                             selectionColor: panel.c.accentDim
@@ -335,11 +321,13 @@ Item {
                             Text {
                                 visible: input.text === "" && !input.activeFocus
                                 text: "Password"
-                                color: panel.c.muted
+                                color: panel.c.faint
                                 font: input.font
                             }
 
                             onAccepted: join()
+                            onVisibleChanged: if (visible) forceActiveFocus()
+                            Keys.onEscapePressed: panel.joining = ""
 
                             function join() {
                                 if (text === "")
@@ -350,8 +338,9 @@ Item {
                             }
                         }
 
-                        ActionButton {
-                            x: parent.width - width - 12
+                        PanelButton {
+                            anchors.right: parent.right
+                            anchors.rightMargin: 8
                             anchors.bottom: parent.bottom
                             anchors.bottomMargin: 4
                             text: "Join"
@@ -364,14 +353,14 @@ Item {
 
             Text {
                 visible: !Net.hasWifi
-                x: 16
-                topPadding: 4
-                bottomPadding: 6
-                text: "Wi-Fi · no adapter found on this machine"
-                color: panel.c.muted
+                x: 40
+                topPadding: 6
+                bottomPadding: 4
+                text: "No Wi-Fi adapter on this machine."
+                color: panel.c.faint
                 renderType: Text.CurveRendering
                 font.family: Theme.fontFamily
-                font.pixelSize: 11
+                font.pixelSize: 12
             }
         }
     }

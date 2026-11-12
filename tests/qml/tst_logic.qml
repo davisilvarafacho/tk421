@@ -250,4 +250,46 @@ TestCase {
         const p = policy({ transient: true, dnd: true })
         verify(!p.toast); verify(!p.history)
     }
+
+    // ---- conversations ----
+    function note(label, summary, ts, critical) {
+        return { label: label, appName: label, summary: summary, timestamp: ts, critical: critical === true }
+    }
+
+    function test_conversations_fold_same_app_and_title() {
+        const a1 = note("Telegram", "jacaré", at(12, 13, 59))
+        const b = note("Telegram", "# dev", at(12, 13, 58))
+        const a2 = note("Telegram", "jacaré", at(12, 13, 50))
+        const g = Logic.conversations([a1, b, a2], now)
+        compare(g.length, 2)
+        compare(g[0].entries.length, 2)
+        verify(g[0].entries[0] === a1)
+        verify(g[0].entries[1] === a2)
+        compare(g[1].entries.length, 1)
+    }
+
+    function test_conversations_same_title_other_app_stays_apart() {
+        const g = Logic.conversations([note("Telegram", "Ana", at(12, 13, 0)), note("Discord", "Ana", at(12, 12, 0))], now)
+        compare(g.length, 2)
+    }
+
+    function test_conversations_critical_first() {
+        const g = Logic.conversations([note("Chat", "new", at(12, 13, 59)), note("System", "Disk", at(12, 9, 0), true)], now)
+        compare(g[0].key, "System\u0000Disk")
+        compare(g[0].section, "Priority alpha")
+        compare(g[1].section, "Today")
+    }
+
+    function test_conversations_sections() {
+        const g = Logic.conversations([
+            note("A", "x", at(12, 13, 0)), note("B", "y", at(12, 8, 0)), note("C", "z", at(11, 20, 0))
+        ], now)
+        verify(g[0].newSection); compare(g[0].section, "Today")
+        verify(!g[1].newSection)
+        verify(g[2].newSection); compare(g[2].section, "Yesterday")
+    }
+
+    function test_conversations_empty() {
+        compare(Logic.conversations([], now).length, 0)
+    }
 }

@@ -58,7 +58,7 @@ Singleton {
         if (sending || name === "")
             return
         if (readProc.running || writeProc.running) {
-            gifError = "wait for the keyboard to finish writing"
+            gifError = "Wait for the keyboard to finish writing."
             return
         }
         gifError = ""
@@ -212,9 +212,9 @@ Singleton {
                     const d = JSON.parse(text)
                     root.apply(d)
                     if (!d.ok)
-                        root.error = "gravação não confirmada pelo teclado"
+                        root.error = "The keyboard did not confirm the change."
                 } catch (e) {
-                    root.error = "resposta inválida do teclado"
+                    root.error = "The keyboard sent an answer that could not be read."
                 }
             }
         }
@@ -272,7 +272,7 @@ Singleton {
         onExited: exitCode => {
             root.sending = false
             if (exitCode !== 0 && root.gifError === "")
-                root.gifError = "send interrupted"
+                root.gifError = "The send was interrupted."
             root.refresh()
             root.pump()
         }

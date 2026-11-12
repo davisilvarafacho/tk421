@@ -7,7 +7,9 @@ import "../services"
 import "../theme"
 
 // The one window behind every bar dropdown (power, tray overflow, a tray app's menu, network, Bluetooth, sound).
-// The active panel unrolls from the capsules, exactly like the notification centre design.
+// The toolbar panels grow out of the toolbar pill like the comms log; the tray panels unroll below the tray pill.
+// Panel building blocks: components/PanelHeader, PanelSection, PanelButton and Theme.imperial.rowHover.
+// Reviewed with impeccable critique on 2026-11-12 (contrast, two-click disconnect, wheel, offline states).
 // Prototype: prototypes/toolbar/index.html. State: services/Dropdown.qml.
 // Panel icons are names from the Material Symbols table (theme/icons.js), drawn by components/Icon.qml; no font glyph literals here (final fix wave 2026-11-11).
 PanelWindow {
@@ -19,7 +21,10 @@ PanelWindow {
     property bool opened: false
     property string shown: ""
 
-    readonly property real panelWidth: shown === "sound" || shown === "keyboard" ? 340 : shown === "net" || shown === "bt" ? 320 : shown === "tray" ? 280 : shown === "menu" ? 210 : 260
+    // The toolbar panels dock: they hang from the toolbar pill like the comms log (pill width, ink, no top edge) and the
+    // pill squares its bottom corners (Dropdown.docked). The tray panels float 7 px below the tray pill.
+    readonly property bool dock: shown !== "" && shown !== "tray" && shown !== "menu"
+    readonly property real panelWidth: dock ? Math.round(Notifications.dockWidth) : shown === "sound" || shown === "keyboard" ? 340 : shown === "net" || shown === "bt" ? 320 : shown === "tray" ? 280 : shown === "menu" ? 210 : 260
     readonly property real hostLeft: (win.screen?.width ?? 2560) - 30 - win.width
     // The tray app's menu sits under the icon it belongs to; slot panels are right-aligned.
     readonly property real menuX: Math.max(12, Math.min(Dropdown.menuAnchorX - hostLeft - 24, win.width - 210 - 12))
@@ -28,7 +33,7 @@ PanelWindow {
         top: true
         right: true
     }
-    margins.top: 40
+    margins.top: 33     // the pill spans y 4..34: a docked panel starts on its bottom hairline row and covers it
     margins.right: 30
     implicitWidth: 640
     implicitHeight: shown === "keyboard" ? 800 : 520
@@ -44,6 +49,12 @@ PanelWindow {
 
     // Only the panel takes input; the rest of the window is click-through.
     mask: Region { item: panel }
+
+    Binding {
+        target: Dropdown
+        property: "docked"
+        value: win.visible && win.dock
+    }
 
     component Ease: NumberAnimation {
         easing.type: Easing.BezierSpline
@@ -101,20 +112,35 @@ PanelWindow {
         id: panel
 
         x: win.shown === "menu" ? win.menuX : win.width - width
-        y: 0
-        width: win.opened ? win.panelWidth : 240
+        y: win.dock ? 0 : 7
+        width: win.opened || win.dock ? win.panelWidth : 240
         height: win.opened ? content.implicitHeight + 2 : 0
         radius: win.opened ? 20 : 14
-        color: Qt.alpha(win.c.surface, 0.72)
-        border.width: 1
+        // Docked: this is the hairline on the sides and bottom, the ink fill sits inside it.
+        topLeftRadius: win.dock ? 0 : radius
+        topRightRadius: win.dock ? 0 : radius
+        bottomLeftRadius: win.dock ? 22 : radius
+        bottomRightRadius: win.dock ? 22 : radius
+        color: win.dock ? win.c.hairline : Qt.alpha(win.c.surface, 0.72)
+        border.width: win.dock ? 0 : 1
         border.color: win.c.border
         clip: true
-        opacity: win.opened ? 1 : 0
+        opacity: win.opened || win.dock ? 1 : 0
 
         Behavior on width { Ease { duration: win.opened ? 520 : 340 } }
         Behavior on height { Ease { duration: win.opened ? 520 : 340 } }
         Behavior on radius { Ease { duration: win.opened ? 520 : 340 } }
         Behavior on opacity { NumberAnimation { duration: win.opened ? 200 : 160 } }
+
+        Rectangle {
+            visible: win.dock
+            x: 1
+            width: parent.width - 2
+            height: parent.height - 1
+            color: win.c.ink
+            bottomLeftRadius: 21
+            bottomRightRadius: 21
+        }
 
         // Fixed width, so the growing frame never reflows the content.
         Item {

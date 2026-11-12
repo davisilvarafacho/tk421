@@ -17,6 +17,7 @@ Singleton {
     property string current: ""
     property var menuItem: null             // the SystemTrayItem whose menu the "menu" panel shows
     property real menuAnchorX: 0            // screen x (px) of the tray icon the menu belongs to
+    property bool docked: false             // written by DropdownHost while a toolbar panel hangs from the toolbar pill
 
     // A click outside closes the panel through the focus grab and is followed by the click on the button that caused it.
     // Remember which panel the grab closed, so that click does not reopen it.

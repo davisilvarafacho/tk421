@@ -6,96 +6,76 @@ import "../services"
 import "../theme"
 
 // Bluetooth dropdown: the adapter switch, Scan, the paired devices (connect, disconnect, battery) and nearby devices to
-// pair. State: services/Bt.qml. Prototype: prototypes/toolbar/index.html.
+// pair. State: services/Bt.qml.
+// It hangs from the toolbar pill in the comms log language: Orbitron only for the title, Geist sentence case, quiet rows,
+// a monochrome switch (white when on).
 Item {
     id: panel
 
     readonly property var c: Theme.imperial
 
-    readonly property real bodyHeight: Math.min(column.implicitHeight, 400)
+    readonly property real bodyHeight: Math.min(column.implicitHeight, 420)
 
-    implicitHeight: 48 + bodyHeight + 10
+    implicitHeight: body.y + bodyHeight + 10
 
-    Text {
-        id: title
+    PanelHeader {
+        id: header
 
-        x: 16
-        y: 2 + (46 - height) / 2
-        text: "Bluetooth"
-        color: panel.c.text
-        renderType: Text.CurveRendering
-        font.family: Theme.displayFont
-        font.pixelSize: 11
-        font.letterSpacing: 2.2
-        font.capitalization: Font.AllUppercase
+        x: 22
+        y: 16
+        width: parent.width - 44
+        title: "Bluetooth"
     }
 
-    // Switch: thin outline, accent when on.
-    Rectangle {
-        id: sw
+    // Scan and the adapter switch, on the header line.
+    Row {
+        anchors.right: parent.right
+        anchors.rightMargin: 16
+        anchors.verticalCenter: header.verticalCenter
+        spacing: 10
 
-        x: parent.width - 16 - width
-        y: 2 + (46 - height) / 2
-        width: 30
-        height: 16
-        radius: 8
-        color: Bt.powered ? panel.c.accentDim : "transparent"
-        border.width: 1
-        border.color: Bt.powered ? panel.c.accent : panel.c.border
-
-        Behavior on color {
-            ColorAnimation { duration: 160 }
+        PanelButton {
+            visible: Bt.powered
+            anchors.verticalCenter: parent.verticalCenter
+            text: Bt.scanning ? "Scanning…" : "Scan"
+            enabled: !Bt.scanning
+            onClicked: Bt.scan()
         }
 
         Rectangle {
-            x: Bt.powered ? 16 : 3
-            anchors.verticalCenter: parent.verticalCenter
-            width: 10
-            height: 10
-            radius: 5
-            color: Bt.powered ? panel.c.text : panel.c.muted
+            id: sw
 
-            Behavior on x {
-                NumberAnimation { duration: 200; easing.type: Easing.OutCubic }
+            anchors.verticalCenter: parent.verticalCenter
+            width: 32
+            height: 18
+            radius: 9
+            color: Bt.powered ? panel.c.text : swArea.containsMouse ? "#24242C" : panel.c.surfaceAlt
+            // Off, the track would vanish on the ink (1.2:1): a faint edge keeps the switch visible.
+            border.width: Bt.powered ? 0 : 1
+            border.color: panel.c.faint
+
+            Behavior on color { ColorAnimation { duration: 160 } }
+
+            Rectangle {
+                x: Bt.powered ? parent.width - width - 3 : 3
+                anchors.verticalCenter: parent.verticalCenter
+                width: 12
+                height: 12
+                radius: 6
+                color: Bt.powered ? panel.c.ink : panel.c.muted
+
+                Behavior on x { NumberAnimation { duration: 200; easing.type: Easing.OutCubic } }
             }
-        }
 
-        MouseArea {
-            anchors.fill: parent
-            cursorShape: Qt.PointingHandCursor
-            onClicked: Bt.setPowered(!Bt.powered)
-        }
-    }
+            MouseArea {
+                id: swArea
 
-    ActionButton {
-        visible: Bt.powered
-        x: sw.x - 6 - width
-        y: 2 + (46 - height) / 2
-        text: Bt.scanning ? "Scanning…" : "Scan"
-        enabled: !Bt.scanning
-        opacity: enabled ? 1 : 0.6
-        onClicked: Bt.scan()
-    }
-
-    component Section: Item {
-        id: section
-
-        property string label: ""
-
-        width: column.width
-        height: 28
-
-        Text {
-            x: 16
-            anchors.verticalCenter: parent.verticalCenter
-            anchors.verticalCenterOffset: 6
-            text: section.label
-            color: panel.c.muted
-            renderType: Text.CurveRendering
-            font.family: Theme.displayFont
-            font.pixelSize: 9
-            font.letterSpacing: 1.8
-            font.capitalization: Font.AllUppercase
+                anchors.fill: parent
+                anchors.margins: -4
+                hoverEnabled: true
+                cursorShape: Qt.PointingHandCursor
+                onClicked: Bt.setPowered(!Bt.powered)
+            }
         }
     }
 
@@ -111,78 +91,72 @@ Item {
 
         Rectangle {
             anchors.fill: parent
-            color: Qt.rgba(0.91, 0.9, 0.89, 0.035)
-            opacity: area.containsMouse ? 1 : 0
+            radius: 14
+            color: area.containsMouse ? Theme.imperial.rowHover : "transparent"
 
-            Behavior on opacity {
-                NumberAnimation { duration: 120 }
-            }
+            Behavior on color { ColorAnimation { duration: 120 } }
         }
 
         Icon {
-            x: 16 + (20 - width) / 2      // centred in the 20 px cell the text columns are laid out against
+            x: 12
             anchors.verticalCenter: parent.verticalCenter
             name: row.modelData.glyph
             size: Theme.iconSize.panel
-            color: area.containsMouse ? panel.c.text : panel.c.muted
+            color: row.modelData.connected || area.containsMouse ? Theme.imperial.text : Theme.imperial.muted
+
+            // A device that is connecting or pairing breathes until it settles.
+            SequentialAnimation on opacity {
+                running: row.modelData.busy
+                loops: Animation.Infinite
+                alwaysRunToEnd: true
+
+                NumberAnimation { to: 0.35; duration: 600; easing.type: Easing.InOutSine }
+                NumberAnimation { to: 1; duration: 600; easing.type: Easing.InOutSine }
+            }
         }
 
         Column {
-            x: 48
+            x: 40
             anchors.verticalCenter: parent.verticalCenter
-            width: parent.width - 48 - 90
+            width: parent.width - x - 12 - 80
 
-            Row {
-                spacing: 6
-
-                Rectangle {
-                    visible: row.modelData.connected
-                    anchors.verticalCenter: parent.verticalCenter
-                    width: 5
-                    height: 5
-                    radius: 2.5
-                    color: panel.c.accent
-                }
-
-                Text {
-                    text: row.modelData.name
-                    textFormat: Text.PlainText
-                    elide: Text.ElideRight
-                    width: Math.min(implicitWidth, 170)
-                    color: panel.c.text
-                    renderType: Text.CurveRendering
-                    font.family: Theme.fontFamily
-                    font.pixelSize: 13
-                    font.weight: Font.Medium
-                }
+            Text {
+                width: parent.width
+                text: row.modelData.name
+                textFormat: Text.PlainText
+                elide: Text.ElideRight
+                color: row.modelData.connected || area.containsMouse ? Theme.imperial.text : Theme.imperial.muted
+                renderType: Text.CurveRendering
+                font.family: Theme.fontFamily
+                font.pixelSize: 13
+                font.weight: row.modelData.connected ? Font.Medium : Font.Normal
             }
 
             Text {
+                width: parent.width
+                // "Paired" under every row of "My devices" only repeats the section: the line shows only news.
+                visible: text !== "" && text !== "Paired"
                 text: row.modelData.sub
                 textFormat: Text.PlainText
-                color: panel.c.muted
+                elide: Text.ElideRight
+                color: row.modelData.connected || row.modelData.busy ? Theme.imperial.muted : Theme.imperial.faint
                 renderType: Text.CurveRendering
                 font.family: Theme.fontFamily
                 font.pixelSize: 11
             }
         }
 
+        // What a click does, only on hover.
         Text {
-            x: parent.width - 16 - implicitWidth
+            visible: area.containsMouse && !row.modelData.busy
+            anchors.right: parent.right
+            anchors.rightMargin: 12
             anchors.verticalCenter: parent.verticalCenter
-            anchors.verticalCenterOffset: 1
             text: row.action
-            opacity: area.containsMouse && !row.modelData.busy ? 1 : 0
-            color: panel.c.muted
+            color: Theme.imperial.muted
             renderType: Text.CurveRendering
-            font.family: Theme.displayFont
-            font.pixelSize: 9
-            font.letterSpacing: 1.4
-            font.capitalization: Font.AllUppercase
-
-            Behavior on opacity {
-                NumberAnimation { duration: 140 }
-            }
+            font.family: Theme.fontFamily
+            font.pixelSize: 11
         }
 
         MouseArea {
@@ -197,8 +171,11 @@ Item {
     }
 
     Flickable {
-        y: 48
-        width: parent.width
+        id: body
+
+        x: 10
+        y: 16 + 28 + 2
+        width: parent.width - 20
         height: panel.bodyHeight
         contentHeight: column.implicitHeight
         clip: true
@@ -213,31 +190,21 @@ Item {
             // ---- off ----
             Column {
                 visible: !Bt.powered
-                width: column.width
-                topPadding: 26
-                bottomPadding: 22
-                spacing: 6
-
-                Icon {
-                    anchors.horizontalCenter: parent.horizontalCenter
-                    name: "bluetooth"
-                    color: panel.c.muted
-                    size: Theme.iconSize.hero
-                }
+                x: 40
+                width: column.width - 40
+                topPadding: 14
+                bottomPadding: 6
+                spacing: 2
 
                 Text {
-                    anchors.horizontalCenter: parent.horizontalCenter
-                    topPadding: 6
-                    text: "Bluetooth is off"
+                    text: "Bluetooth is off."
                     color: panel.c.text
                     renderType: Text.CurveRendering
                     font.family: Theme.fontFamily
                     font.pixelSize: 13
-                    font.weight: Font.Medium
                 }
 
                 Text {
-                    anchors.horizontalCenter: parent.horizontalCenter
                     text: "Turn it on to connect your devices."
                     color: panel.c.muted
                     renderType: Text.CurveRendering
@@ -245,8 +212,10 @@ Item {
                     font.pixelSize: 12
                 }
 
-                ActionButton {
-                    anchors.horizontalCenter: parent.horizontalCenter
+                Item { width: 1; height: 10 }
+
+                PanelButton {
+                    x: -10
                     text: "Turn on"
                     primary: true
                     onClicked: Bt.setPowered(true)
@@ -254,7 +223,7 @@ Item {
             }
 
             // ---- on ----
-            Section { visible: Bt.powered; height: visible ? 28 : 0; label: "My devices" }
+            PanelSection { visible: Bt.powered; width: column.width; implicitHeight: visible ? 30 : 0; label: "My devices" }
 
             Repeater {
                 model: Bt.powered ? Bt.devices : []
@@ -267,28 +236,22 @@ Item {
 
             Text {
                 visible: Bt.powered && Bt.devices.length === 0
-                x: 16
-                topPadding: 2
+                x: 40
+                topPadding: 4
                 bottomPadding: 6
-                text: "No paired devices. Press Scan."
-                color: panel.c.muted
+                text: "No paired devices. Scan to find one."
+                color: panel.c.faint
                 renderType: Text.CurveRendering
                 font.family: Theme.fontFamily
-                font.pixelSize: 11
+                font.pixelSize: 12
             }
 
-            Section { visible: Bt.powered && (Bt.scanning || Bt.nearby.length > 0); height: visible ? 28 : 0; label: "Nearby" }
-
-            Text {
-                visible: Bt.powered && Bt.scanning && Bt.nearby.length === 0
-                x: 16
-                topPadding: 2
-                bottomPadding: 6
-                text: "Searching…"
-                color: panel.c.muted
-                renderType: Text.CurveRendering
-                font.family: Theme.fontFamily
-                font.pixelSize: 11
+            PanelSection {
+                visible: Bt.powered && (Bt.scanning || Bt.nearby.length > 0)
+                width: column.width
+                implicitHeight: visible ? 34 : 0
+                label: "Nearby"
+                status: Bt.scanning ? "Searching" : ""
             }
 
             Repeater {

@@ -27,6 +27,8 @@ QtObject {
         readonly property color surfaceAlt: "#1A1A21"
         readonly property color text: "#E8E6E3"
         readonly property color muted: "#8E8B88"
+        readonly property color faint: "#75737A"     // third text level on ink (4.5:1, AA for small text): older lines, times, labels
+        readonly property color rowHover: "#0D0D10"  // hover fill of a list row on ink (comms log, power)
         readonly property color accent: "#506A9B"
         readonly property color accentDim: "#29384F"
         readonly property color danger: "#A14D55"

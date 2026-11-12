@@ -5,47 +5,57 @@ import "../components"
 import "../services"
 import "../theme"
 
-// Power menu. Lock and Suspend run at once; Log out, Restart and Power off ask first (Power.confirming), and the
-// question cancels itself after 5 s (Power.qml). Prototype: prototypes/toolbar/index.html.
+// Power menu. It hangs from the toolbar pill like the comms log (DropdownHost docks it: pill width, opaque ink, no top
+// edge), in the same language: Orbitron only for the title, Geist in sentence case, quiet rows with a hover fill.
+// Lock and Suspend run at once; Log out, Restart and Power off ask first (Power.confirming), and the question cancels
+// itself after 5 s (Power.qml). A click elsewhere on the asking row or Esc cancels it too.
 Item {
     id: panel
 
     readonly property var c: Theme.imperial
 
-    implicitHeight: 48 + column.implicitHeight + 8
+    implicitHeight: column.y + column.implicitHeight + 10
 
-    Text {
-        id: title
+    // Header: title and the user it acts on.
+    Item {
+        id: header
 
-        x: 16
-        y: 2 + (46 - height) / 2
-        text: "Power"
-        color: panel.c.text
-        renderType: Text.CurveRendering
-        font.family: Theme.displayFont
-        font.pixelSize: 11
-        font.letterSpacing: 2.2
-        font.capitalization: Font.AllUppercase
-    }
+        x: 22
+        y: 16
+        width: parent.width - 44
+        height: 28
 
-    Text {
-        x: title.x + title.implicitWidth + 8
-        y: title.y
-        height: title.height
-        verticalAlignment: Text.AlignVCenter
-        text: Quickshell.env("USER") ?? ""
-        textFormat: Text.PlainText
-        color: panel.c.muted
-        renderType: Text.CurveRendering
-        font.family: Theme.fontFamily
-        font.pixelSize: 11
+        Text {
+            id: title
+
+            anchors.verticalCenter: parent.verticalCenter
+            anchors.verticalCenterOffset: 1
+            text: "POWER"
+            color: panel.c.text
+            renderType: Text.CurveRendering
+            font.family: Theme.displayFont
+            font.pixelSize: 11
+            font.letterSpacing: 2.2
+        }
+
+        Text {
+            anchors.right: parent.right
+            anchors.verticalCenter: parent.verticalCenter
+            text: Quickshell.env("USER") ?? ""
+            textFormat: Text.PlainText
+            color: panel.c.faint
+            renderType: Text.CurveRendering
+            font.family: Theme.fontFamily
+            font.pixelSize: 12
+        }
     }
 
     Column {
         id: column
 
-        y: 48
-        width: parent.width
+        x: 10
+        y: header.y + header.height + 10
+        width: parent.width - 20
 
         Repeater {
             model: Power.actions
@@ -72,101 +82,111 @@ Item {
                 }
 
                 Rectangle {
+                    id: chip
+
                     y: row.yOff
                     width: parent.width
                     height: 40
-                    color: Qt.rgba(0.91, 0.9, 0.89, 0.035)
-                    opacity: area.containsMouse && !row.asking ? 1 : 0
+                    radius: 14
+                    color: row.asking ? Qt.alpha(panel.c.danger, 0.14)
+                        : area.containsMouse ? panel.c.rowHover : "transparent"
 
-                    Behavior on opacity {
-                        NumberAnimation { duration: 120 }
+                    Behavior on color { ColorAnimation { duration: 120 } }
+
+                    // The question drains along the bottom of the row over its 5 s.
+                    Rectangle {
+                        visible: row.asking
+                        x: 14
+                        y: parent.height - 1
+                        width: (parent.width - 28) * row.progress
+                        height: 1
+                        color: panel.c.danger
                     }
                 }
 
                 MouseArea {
                     id: area
 
-                    y: row.yOff
-                    width: parent.width
-                    height: 40
-                    enabled: !row.asking
+                    anchors.fill: chip
                     hoverEnabled: true
-                    cursorShape: Qt.PointingHandCursor
-                    onClicked: row.modelData.confirm ? Power.ask(row.modelData.id) : Power.run(row.modelData.id)
+                    cursorShape: row.asking ? Qt.ArrowCursor : Qt.PointingHandCursor
+                    onClicked: {
+                        if (row.asking)
+                            Power.cancel()
+                        else if (row.modelData.confirm)
+                            Power.ask(row.modelData.id)
+                        else
+                            Power.run(row.modelData.id)
+                    }
                 }
 
                 Icon {
-                    x: 16
+                    x: 12
                     y: row.yOff + (40 - height) / 2
                     name: row.modelData.glyph
                     size: Theme.iconSize.panel
                     color: row.asking ? panel.c.dangerText : area.containsMouse ? panel.c.text : panel.c.muted
 
-                    Behavior on color {
-                        ColorAnimation { duration: 140 }
-                    }
+                    Behavior on color { ColorAnimation { duration: 140 } }
                 }
 
                 Text {
-                    x: 46
+                    x: 12 + 16 + 12
                     y: row.yOff + (40 - height) / 2
                     text: row.asking ? row.modelData.label + "?" : row.modelData.label
                     textFormat: Text.PlainText
                     color: row.asking ? panel.c.dangerText : panel.c.text
                     renderType: Text.CurveRendering
                     font.family: Theme.fontFamily
-                    font.pixelSize: 13
-                    font.weight: Font.Medium
+                    font.pixelSize: 14
                 }
 
                 Text {
                     visible: !row.asking && row.modelData.hint !== ""
-                    x: row.width - 16 - implicitWidth
-                    y: row.yOff + (40 - height) / 2 + 1
+                    x: row.width - 14 - implicitWidth
+                    y: row.yOff + (40 - height) / 2
                     text: row.modelData.hint
                     textFormat: Text.PlainText
-                    color: panel.c.muted
+                    color: panel.c.faint
                     renderType: Text.CurveRendering
-                    font.family: Theme.displayFont
-                    font.pixelSize: 9
-                    font.letterSpacing: 1.4
-                    font.capitalization: Font.AllUppercase
+                    font.family: Theme.fontFamily
+                    font.pixelSize: 11
                 }
 
-                // A click anywhere on the asking row cancels it (the Confirm button sits above this). Esc and the 5 s do too.
-                MouseArea {
-                    y: row.yOff
-                    width: parent.width
-                    height: 40
-                    enabled: row.asking
-                    cursorShape: Qt.ArrowCursor
-                    onClicked: Power.cancel()
-                }
+                // Confirm: the one solid control in the panel, only while asking.
+                Rectangle {
+                    id: confirm
 
-                // The question: confirm, and a hairline that drains over the 5 s.
-                Row {
                     visible: row.asking
-                    x: row.width - 16 - width
+                    x: row.width - 8 - width
                     y: row.yOff + (40 - height) / 2
-                    spacing: 4
+                    width: confirmText.implicitWidth + 20
+                    height: 26
+                    radius: 8
+                    color: confirmArea.containsMouse ? panel.c.danger : Qt.alpha(panel.c.danger, 0.55)
 
-                    ActionButton {
+                    Behavior on color { ColorAnimation { duration: 120 } }
+
+                    Text {
+                        id: confirmText
+
+                        anchors.centerIn: parent
                         text: "Confirm"
-                        primary: true
-                        danger: true
-                        implicitHeight: 24
+                        color: panel.c.text
+                        renderType: Text.CurveRendering
+                        font.family: Theme.fontFamily
+                        font.pixelSize: 12
+                        font.weight: Font.Medium
+                    }
+
+                    MouseArea {
+                        id: confirmArea
+
+                        anchors.fill: parent
+                        hoverEnabled: true
+                        cursorShape: Qt.PointingHandCursor
                         onClicked: Power.confirm()
                     }
-                }
-
-                Rectangle {
-                    visible: row.asking
-                    x: 16
-                    y: row.yOff + 39
-                    width: (row.width - 32) * row.progress
-                    height: 1
-                    color: panel.c.danger
-                    opacity: 0.8
                 }
             }
         }

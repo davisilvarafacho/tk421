@@ -35,6 +35,23 @@ function ago(at, now) {
 }
 
 // Human text for the error codes usage/fetch.py reports.
+// The one-line headline of a failed read.
+function errorTitle(code) {
+    switch (code) {
+    case "no_credentials":
+        return "Not signed in"
+    case "token_expired":
+    case "unauthorized":
+        return "Login expired"
+    case "network":
+        return "Offline"
+    case "rate_limited":
+        return "Rate limited"
+    default:
+        return "Read failed"
+    }
+}
+
 function errorText(code) {
     switch (code) {
     case "no_credentials":

@@ -1,0 +1,475 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>TK-421 Comms Log v2</title>
+<style>
+  /* Comms log redesign (2026-11-12). Replaces the translucent full-height drawer (notifications/NotificationCenter.qml).
+     Design read: shell drawer for one power user, Imperial cold and precise, built from the shell's own tokens:
+     the opaque ink + hairline of the bar pills and the island, Orbitron labels, Geist text, Material Symbols Sharp 300.
+     Dials: variance 4, motion 4, density 6.
+     Two directions, switchable in the prototype controls (bottom left):
+       STACK  - one card per conversation; repeats from the same sender fold into a stack, click to unfold.
+       LEDGER - a flat time column; consecutive lines from the same sender merge into one entry.
+     Both: opaque, height follows the content, hangs 40 px from the top and 30 px from the right wall like the dropdowns. */
+  :root {
+    color-scheme: dark;
+    --ink: #000;
+    --surface: #0c0b0d;
+    --raise: #111114;            /* a card on the ink */
+    --raise-hover: #16161a;
+    --surface-alt: #1a1a21;      /* hover chip, same as the bar */
+    --hairline: rgba(255, 255, 255, 0.09);
+    --hairline-strong: rgba(255, 255, 255, 0.14);
+    --text: #e8e6e3;
+    --muted: #8e8b88;
+    --faint: #5d5b59;
+    --accent: #506a9b;
+    --accent-dim: #29384f;
+    --danger-text: #d9808a;
+    --ease: cubic-bezier(0.22, 1, 0.36, 1);
+    --display: "Orbitron", "Geist", sans-serif;
+    --ui: "Geist", "Noto Color Emoji", sans-serif;
+    --icons: "Material Symbols Sharp";
+  }
+
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  html, body { height: 100%; background: #050505; }
+  body { font-family: var(--ui); color: var(--text); overflow: hidden; -webkit-font-smoothing: antialiased; }
+  button { font: inherit; color: inherit; background: none; border: 0; cursor: pointer; }
+  button:focus-visible { outline: 1px solid var(--accent); outline-offset: 2px; }
+
+  .ms {
+    font-family: var(--icons); font-weight: normal; font-style: normal; font-size: 16px; line-height: 1;
+    font-variation-settings: "FILL" 0, "wght" 300, "GRAD" 0, "opsz" 24;
+    display: inline-block; width: 1em; height: 1em; overflow: hidden; user-select: none;
+  }
+
+  /* ---------- context: wallpaper, a busy terminal behind, the bar ---------- */
+  .wall { position: fixed; inset: 0; background: url("wallpaper.jpg") center / cover no-repeat; filter: brightness(0.75); }
+  .term {
+    position: fixed; top: 46px; right: 8px; bottom: 8px; width: min(900px, 70vw);
+    background: #0b0b0d; border: 2px solid #3c4a63; border-radius: 6px; padding: 18px 22px;
+    font: 15px/1.65 "Monaspace Neon", ui-monospace, monospace; color: #b8b6b2; overflow: hidden; white-space: pre;
+  }
+  .term b { color: #e8e6e3; font-weight: 400; }
+
+  .pill {
+    position: fixed; top: 4px; height: 30px; display: flex; align-items: center; gap: 4px;
+    background: var(--ink); border: 1px solid var(--hairline); border-radius: 15px; padding: 0 12px;
+  }
+  .pill.tool { right: 30px; }
+  .cell {
+    height: 22px; min-width: 24px; padding: 0 4px; border-radius: 8px;
+    display: inline-flex; align-items: center; justify-content: center; gap: 4px;
+    color: #b5bac3; transition: background-color 140ms, color 140ms;
+  }
+  .cell .num { font: 500 10px/1 var(--display); letter-spacing: 0.4px; position: relative; top: 1px; }
+  button.cell:hover, button.cell[aria-expanded="true"] { background: var(--surface-alt); color: var(--text); }
+  .bell-count { font: 500 10px/1 var(--display); color: var(--text); position: relative; top: 1px; }
+  .bell-count:empty { display: none; }
+
+  /* ---------- the comms log ---------- */
+  .log {
+    position: fixed; top: 40px; right: 30px; width: 384px; max-height: calc(100vh - 48px);
+    display: flex; flex-direction: column;
+    background: var(--ink); border: 1px solid var(--hairline); border-radius: 20px; overflow: hidden;
+    transform-origin: top right;
+    transition: opacity 340ms var(--ease), transform 340ms var(--ease), clip-path 340ms var(--ease);
+    clip-path: inset(0 0 0 0 round 20px);
+  }
+  .log.closed { opacity: 0; transform: translateY(-6px); clip-path: inset(0 0 100% 0 round 20px); pointer-events: none; }
+  .log:not(.closed) { transition-duration: 520ms; }
+  .glass .log { background: rgba(12, 11, 13, 0.72); backdrop-filter: blur(18px); border-color: #3f3e44; }
+
+  .head {
+    flex: none; height: 52px; padding: 0 12px 0 18px;
+    display: flex; align-items: center; gap: 10px; border-bottom: 1px solid var(--hairline);
+  }
+  .title { font: 500 11px/1 var(--display); letter-spacing: 2.2px; position: relative; top: 1px; }
+  .unread { font: 500 9px/1 var(--display); letter-spacing: 1.6px; color: var(--muted); position: relative; top: 1px; }
+  .head .sp { flex: 1; }
+  .icon-btn {
+    width: 28px; height: 28px; border-radius: 8px; display: grid; place-items: center; color: var(--muted);
+    transition: background-color 140ms, color 140ms;
+  }
+  .icon-btn:hover { background: var(--surface-alt); color: var(--text); }
+  .icon-btn[aria-pressed="true"] { background: var(--accent-dim); color: var(--text); }
+  .text-btn {
+    height: 28px; padding: 0 10px; border-radius: 8px; color: var(--muted);
+    font: 500 9px/1 var(--display); letter-spacing: 1.6px; transition: background-color 140ms, color 140ms;
+  }
+  .text-btn:hover { background: var(--surface-alt); color: var(--text); }
+  .text-btn:disabled { opacity: 0.3; pointer-events: none; }
+
+  .silenced {
+    flex: none; display: none; align-items: center; gap: 8px; padding: 10px 18px;
+    border-bottom: 1px solid var(--hairline); color: var(--muted); font-size: 12px;
+  }
+  .silenced .ms { color: var(--accent); }
+  .silenced strong { font: 500 9px/1 var(--display); letter-spacing: 1.6px; color: var(--text); position: relative; top: 1px; }
+  .dnd .silenced { display: flex; }
+
+  .body { overflow-y: auto; padding: 6px 10px 12px; scrollbar-width: thin; scrollbar-color: #2a2a30 transparent; }
+  .day { font: 500 9px/1 var(--display); letter-spacing: 1.8px; color: var(--faint); padding: 14px 8px 8px; }
+
+  .meta { display: flex; align-items: center; gap: 8px; height: 16px; }
+  .app { font: 500 9px/1 var(--display); letter-spacing: 1.6px; color: var(--muted); text-transform: uppercase; position: relative; top: 1px; }
+  .when { margin-left: auto; font: 500 9px/1 var(--display); letter-spacing: 1px; color: var(--faint); position: relative; top: 1px; }
+  .tile { width: 16px; height: 16px; display: grid; place-items: center; color: var(--muted); flex: none; }
+  .tile img { width: 14px; height: 14px; opacity: 0.62; }
+  .sum { font-size: 13px; font-weight: 500; line-height: 20px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .txt { font-size: 12px; line-height: 16px; color: var(--muted); display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+  .read .sum { color: #b9b6b2; font-weight: 400; }
+
+  /* hover actions: the time gives way to them */
+  .acts { margin-left: auto; display: none; align-items: center; gap: 2px; }
+  .acts button { height: 20px; padding: 0 6px; border-radius: 6px; color: var(--muted); font: 500 8.5px/1 var(--display); letter-spacing: 1.3px; }
+  .acts button.x { width: 20px; padding: 0; display: grid; place-items: center; }
+  .acts button:hover { background: var(--surface-alt); color: var(--text); }
+  .hov:hover .acts, .hov:focus-within .acts { display: inline-flex; }
+  .hov:hover .when, .hov:focus-within .when { display: none; }
+
+  /* ---------- STACK ---------- */
+  .card {
+    position: relative; margin-bottom: 8px; border-radius: 14px; background: var(--raise);
+    border: 1px solid var(--hairline); transition: background-color 140ms, margin-bottom 360ms var(--ease);
+  }
+  .card:hover { background: var(--raise-hover); }
+  .card.unread::before {         /* unread: a short accent rule on the left edge, not a dot */
+    content: ""; position: absolute; left: -1px; top: 16px; width: 2px; height: 14px; background: var(--accent); border-radius: 0 2px 2px 0;
+  }
+  .card .top { padding: 12px 14px 12px; }
+  .card .top .sum { margin-top: 6px; }
+  .count {
+    font: 500 9px/1 var(--display); letter-spacing: 0.6px; color: var(--text);
+    padding: 3px 5px 2px; border-radius: 5px; background: var(--surface-alt); position: relative; top: 0;
+  }
+  /* collapsed stack: plates peek out below the card */
+  .card.stacked { margin-bottom: 18px; }
+  .card.stacked::after, .card.stacked .plate {
+    content: ""; position: absolute; left: 10px; right: 10px; bottom: -6px; height: 10px; z-index: -1;
+    background: #0b0b0d; border: 1px solid var(--hairline); border-top: 0; border-radius: 0 0 12px 12px;
+  }
+  .card.stacked .plate { left: 20px; right: 20px; bottom: -11px; background: #08080a; }
+  .card.open { margin-bottom: 8px; }
+  .card.open::after, .card.open .plate { display: none; }
+
+  .more { display: grid; grid-template-rows: 0fr; transition: grid-template-rows 360ms var(--ease); }
+  .card.open .more { grid-template-rows: 1fr; }
+  .more > div { overflow: hidden; }
+  .line {
+    display: flex; gap: 10px; padding: 8px 14px 8px 38px; border-top: 1px solid var(--hairline);
+    font-size: 12px; line-height: 16px; color: var(--muted);
+  }
+  .line .t { flex: 1; min-width: 0; }
+  .line .w { font: 500 9px/16px var(--display); letter-spacing: 1px; color: var(--faint); }
+  .fold { display: flex; align-items: center; gap: 6px; color: var(--faint); font: 500 8.5px/1 var(--display); letter-spacing: 1.3px; padding-top: 8px; }
+  .fold .ms { font-size: 14px; transition: transform 360ms var(--ease); }
+  .card.open .fold .ms { transform: rotate(180deg); }
+  .card .actions-row { display: flex; gap: 4px; margin-top: 10px; }
+  .chip {
+    height: 24px; padding: 0 10px; border-radius: 8px; background: var(--surface-alt); color: var(--text);
+    font: 500 8.5px/1 var(--display); letter-spacing: 1.4px; display: inline-flex; align-items: center; gap: 6px;
+  }
+  .chip:hover { background: #24242c; }
+
+  /* ---------- LEDGER ---------- */
+  .row { display: grid; grid-template-columns: 34px 1fr; gap: 8px; padding: 10px 8px; border-radius: 12px; position: relative; }
+  .row:hover { background: var(--raise); }
+  .row .rail { display: flex; flex-direction: column; align-items: center; gap: 8px; padding-top: 1px; }
+  .row .rail .when { margin: 0; color: var(--muted); }
+  .row .rail .tile { width: 26px; height: 26px; border-radius: 8px; background: var(--raise); border: 1px solid var(--hairline); }
+  .row:hover .rail .tile { background: var(--surface-alt); }
+  .row .who { display: flex; align-items: center; gap: 8px; height: 18px; }
+  .row .who .sum { flex: 1; min-width: 0; }
+  .row .txt + .txt { margin-top: 4px; }
+  .row .app { display: block; margin-top: 6px; color: var(--faint); }
+  .row.unread .rail .when { color: var(--text); }
+  .row.unread::before { content: ""; position: absolute; left: 0; top: 14px; width: 2px; height: 14px; background: var(--accent); border-radius: 0 2px 2px 0; }
+
+  /* empty */
+  .empty { display: none; padding: 48px 0 52px; text-align: center; }
+  .empty .ms { font-size: 24px; color: var(--faint); width: 24px; height: 24px; }
+  .empty p:first-of-type { margin-top: 12px; font: 500 10px/1 var(--display); letter-spacing: 2px; }
+  .empty p:last-of-type { margin-top: 8px; font-size: 12px; color: var(--muted); }
+  .is-empty .empty { display: block; }
+  .is-empty .feed { display: none; }
+
+  /* ---------- prototype controls (not part of the design) ---------- */
+  .ctl {
+    position: fixed; left: 20px; bottom: 20px; width: 280px; padding: 14px; border-radius: 14px;
+    background: rgba(0, 0, 0, 0.82); border: 1px solid var(--hairline); font-size: 12px; color: var(--muted);
+  }
+  .ctl h2 { font: 500 9px/1 var(--display); letter-spacing: 1.8px; color: var(--text); margin-bottom: 10px; }
+  .ctl .grp { display: flex; gap: 4px; margin-bottom: 8px; flex-wrap: wrap; }
+  .ctl button { height: 26px; padding: 0 10px; border-radius: 8px; background: var(--surface-alt); color: var(--muted); font-size: 12px; }
+  .ctl button[aria-pressed="true"] { background: var(--accent-dim); color: var(--text); }
+  .ctl p { line-height: 1.45; margin-top: 4px; }
+
+  @media (prefers-reduced-motion: reduce) {
+    *, *::before, *::after { transition-duration: 0ms !important; }
+  }
+</style>
+</head>
+<body>
+<div class="wall"></div>
+<div class="term" aria-hidden="true"><b>~/Development/quickshell</b> on main
+❯ qs log -p ~/.config/quickshell/shell.qml | tail
+  INFO: Reloading configuration
+  INFO: Configuration reloaded (14 files)
+  WARN: enableSurface: wl_surface@81 has focus
+❯ uv run pytest tests -q
+  ............................................ [100%]
+  44 passed in 1.83s
+❯ git status --short
+   M CLAUDE.md
+   M TODO.md
+  ?? prototypes/icon-themes/
+❯ makepkg -si
+  ==> Making package: hyprfm-git
+  ==> Checking runtime dependencies...
+  ==> Checking buildtime dependencies...
+  ==> Retrieving sources...
+  ==> Validating source files with sha256sums...
+  ==> Extracting sources...
+  ==> Starting build()...
+  -- The CXX compiler identification is GNU 16.1.1
+  -- Configuring done (0.6s)
+  -- Generating done (0.1s)
+  [  2%] Building CXX object src/CMakeFiles/hyprfm.dir/main.cpp.o
+  [  4%] Building CXX object src/CMakeFiles/hyprfm.dir/model.cpp.o</div>
+
+<div class="pill tool" role="toolbar" aria-label="Toolbar">
+  <span class="cell"><span class="ms">asterisk</span><span class="num">42%</span></span>
+  <span class="cell"><span class="ms">keyboard</span></span>
+  <span class="cell"><span class="ms">lan</span></span>
+  <span class="cell"><span class="ms">bluetooth</span></span>
+  <span class="cell"><span class="ms">volume_up</span><span class="num">35%</span></span>
+  <span class="cell"><span class="ms">mic</span></span>
+  <button class="cell" id="bell" aria-expanded="true" aria-controls="log" aria-label="Comms log">
+    <span class="ms" id="bell-ic">notifications</span><span class="bell-count" id="bell-count"></span>
+  </button>
+  <span class="cell"><span class="ms">power_settings_new</span></span>
+</div>
+
+<section class="log" id="log" aria-label="Comms log">
+  <header class="head">
+    <span class="title">COMMS LOG</span>
+    <span class="unread" id="unread"></span>
+    <span class="sp"></span>
+    <button class="icon-btn" id="dnd" aria-pressed="false" title="Do not disturb"><span class="ms">notifications_paused</span></button>
+    <button class="text-btn" id="purge">PURGE</button>
+  </header>
+  <div class="silenced"><span class="ms">notifications_paused</span><strong>COMMS SILENCED</strong><span>critical still gets through</span></div>
+  <div class="body">
+    <div class="feed" id="feed"></div>
+    <div class="empty"><span class="ms">notifications_paused</span><p>NO TRANSMISSIONS</p><p>All channels clear.</p></div>
+  </div>
+</section>
+
+<aside class="ctl" aria-label="Prototype controls">
+  <h2>PROTOTYPE</h2>
+  <div class="grp" data-key="variant">
+    <button data-v="stack" aria-pressed="true">Stack</button>
+    <button data-v="ledger" aria-pressed="false">Ledger</button>
+  </div>
+  <div class="grp" data-key="fill">
+    <button data-v="opaque" aria-pressed="true">Opaco</button>
+    <button data-v="glass" aria-pressed="false">Vidro (atual)</button>
+  </div>
+  <div class="grp">
+    <button id="t-empty" aria-pressed="false">Vazio</button>
+    <button id="t-reset">Repor</button>
+  </div>
+  <p>Clique no sino para abrir e fechar. Passe o mouse num item para ver as ações; no Stack, clique num cartão empilhado para desdobrar.</p>
+</aside>
+
+<script>
+  // Sample feed. Messages from the same app + title fold together (STACK) or merge when consecutive (LEDGER).
+  const MIN = 60e3, now = Date.now();
+  const seed = () => [
+    { id: 1, app: "notify-send", icon: "ms:screenshot_region", sum: "Screenshot", txt: "Região capturada e copiada para o clipboard.", at: now - 10e3, unread: true },
+    { id: 2, app: "Telegram Desktop", icon: "../../assets/tray/telegram.svg", sum: "jacaré 🐊", txt: "é isso mesmo", at: now - 20e3, unread: true, actions: ["MARK AS READ"] },
+    { id: 3, app: "Telegram Desktop", icon: "../../assets/tray/telegram.svg", sum: "jacaré 🐊", txt: "belezinha", at: now - 40e3, unread: true, actions: ["MARK AS READ"] },
+    { id: 4, app: "Telegram Desktop", icon: "../../assets/tray/telegram.svg", sum: "# Desenvolvimento", txt: "jacaré 🐊: 👍 em \"assim que eu finalizar te aviso\"", at: now - 2 * MIN, unread: true },
+    { id: 5, app: "Telegram Desktop", icon: "../../assets/tray/telegram.svg", sum: "# Desenvolvimento", txt: "jacaré 🐊: 👀 em \"já estou olhando amigo\"", at: now - 2 * MIN - 5e3, unread: true },
+    { id: 6, app: "Claude Code", icon: "../../assets/claude-spark.svg", sum: "Claude is waiting for your input", txt: "", at: now - 5 * MIN, unread: false },
+    { id: 7, app: "Spotify", icon: "../../assets/tray/spotify.svg", sum: "Wind of Change", txt: "Scorpions · Crazy World", at: now - 26 * 60 * MIN, unread: false },
+  ];
+
+  let items = seed();
+  const state = { variant: "stack", open: new Set(), dnd: false, empty: false, shown: true };
+  const $ = (s) => document.querySelector(s);
+
+  function rel(t) {
+    const s = (now - t) / 1000;
+    if (s < 45) return "NOW";
+    if (s < 3600) return Math.round(s / 60) + "M";
+    if (s < 86400) return Math.round(s / 3600) + "H";
+    return Math.round(s / 86400) + "D";
+  }
+  function el(tag, cls, text) {
+    const e = document.createElement(tag);
+    if (cls) e.className = cls;
+    if (text !== undefined) e.textContent = text;     // outside text never goes through innerHTML
+    return e;
+  }
+  function tile(icon) {
+    const t = el("span", "tile");
+    if (icon.startsWith("ms:")) t.append(el("span", "ms", icon.slice(3)));
+    else { const i = el("img"); i.src = icon; i.alt = ""; t.append(i); }
+    return t;
+  }
+  function acts(entry) {
+    const a = el("span", "acts");
+    (entry.actions || []).forEach((name) => {
+      const b = el("button", "", name);
+      b.onclick = (e) => { e.stopPropagation(); markRead(entry.key); };
+      a.append(b);
+    });
+    const x = el("button", "x");
+    x.setAttribute("aria-label", "Dismiss");
+    x.append(el("span", "ms", "close"));
+    x.onclick = (e) => { e.stopPropagation(); dismiss(entry.key); };
+    a.append(x);
+    return a;
+  }
+  function dayOf(t) { return now - t < 86400e3 ? "TODAY" : "EARLIER"; }
+
+  // STACK: group by app + title, newest first.
+  function groupStack() {
+    const map = new Map();
+    for (const n of items) {
+      const key = n.app + "\u0000" + n.sum;
+      if (!map.has(key)) map.set(key, { key, app: n.app, icon: n.icon, sum: n.sum, actions: n.actions, list: [] });
+      map.get(key).list.push(n);
+    }
+    return [...map.values()];
+  }
+  // LEDGER: merge only consecutive items with the same app + title.
+  function groupLedger() {
+    const out = [];
+    for (const n of items) {
+      const last = out[out.length - 1];
+      if (last && last.app === n.app && last.sum === n.sum) last.list.push(n);
+      else out.push({ key: n.app + "\u0000" + n.sum + "\u0000" + n.id, app: n.app, icon: n.icon, sum: n.sum, actions: n.actions, list: [n] });
+    }
+    return out;
+  }
+
+  function renderStack(feed) {
+    let day = "";
+    for (const g of groupStack()) {
+      const head = g.list[0], unread = g.list.some((n) => n.unread), many = g.list.length > 1;
+      const d = dayOf(head.at);
+      if (d !== day) { feed.append(el("div", "day", d)); day = d; }
+
+      const card = el("article", "card hov" + (unread ? " unread" : " read") + (many ? (state.open.has(g.key) ? " open" : " stacked") : ""));
+      if (many) card.append(el("span", "plate"));
+      const top = el("div", "top");
+      const meta = el("div", "meta");
+      meta.append(tile(g.icon), el("span", "app", g.app));
+      if (many) meta.append(el("span", "count", String(g.list.length)));
+      meta.append(el("span", "when", rel(head.at)), acts(g));
+      top.append(meta, el("div", "sum", g.sum));
+      if (head.txt) top.append(el("div", "txt", head.txt));
+      if (many) {
+        const f = el("div", "fold");
+        f.append(el("span", "", state.open.has(g.key) ? "COLLAPSE" : (g.list.length - 1) + " MORE"), el("span", "ms", "expand_more"));
+        top.append(f);
+      }
+      card.append(top);
+
+      if (many) {
+        const more = el("div", "more"), inner = el("div");
+        for (const n of g.list.slice(1)) {
+          const line = el("div", "line");
+          line.append(el("span", "t", n.txt), el("span", "w", rel(n.at)));
+          inner.append(line);
+        }
+        more.append(inner);
+        card.append(more);
+        card.tabIndex = 0;
+        const toggle = () => { state.open.has(g.key) ? state.open.delete(g.key) : state.open.add(g.key); render(); };
+        card.onclick = toggle;
+        card.onkeydown = (e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); toggle(); } };
+      }
+      feed.append(card);
+    }
+  }
+
+  function renderLedger(feed) {
+    let day = "";
+    for (const g of groupLedger()) {
+      const head = g.list[0], unread = g.list.some((n) => n.unread);
+      const d = dayOf(head.at);
+      if (d !== day) { feed.append(el("div", "day", d)); day = d; }
+
+      const row = el("article", "row hov" + (unread ? " unread" : " read"));
+      const rail = el("div", "rail");
+      rail.append(el("span", "when", rel(head.at)), tile(g.icon));
+      const main = el("div");
+      const who = el("div", "who");
+      who.append(el("span", "sum", g.sum), acts(g));
+      main.append(who);
+      for (const n of g.list) if (n.txt) main.append(el("div", "txt", n.txt));
+      main.append(el("span", "app", g.app));
+      row.append(rail, main);
+      feed.append(row);
+    }
+  }
+
+  function render() {
+    const feed = $("#feed");
+    feed.replaceChildren();
+    (state.variant === "stack" ? renderStack : renderLedger)(feed);
+    const unread = items.filter((n) => n.unread).length;
+    $("#unread").textContent = unread ? unread + " UNREAD" : "";
+    $("#bell-count").textContent = unread && !state.dnd ? String(unread) : "";
+    $("#bell-ic").textContent = state.dnd ? "notifications_paused" : "notifications";
+    $("#purge").disabled = items.length === 0;
+    $("#log").classList.toggle("is-empty", items.length === 0);
+    $("#log").classList.toggle("dnd", state.dnd);
+  }
+
+  function keyMatches(key, n) {
+    return key === n.app + "\u0000" + n.sum || key.startsWith(n.app + "\u0000" + n.sum + "\u0000");
+  }
+  function markRead(key) { items.forEach((n) => { if (keyMatches(key, n)) n.unread = false; }); render(); }
+  function dismiss(key) {
+    if (key.split("\u0000").length === 3) {            // a ledger entry: only its own consecutive run
+      const g = groupLedger().find((x) => x.key === key);
+      const ids = new Set(g ? g.list.map((n) => n.id) : []);
+      items = items.filter((n) => !ids.has(n.id));
+    } else items = items.filter((n) => !keyMatches(key, n));
+    render();
+  }
+
+  $("#bell").onclick = () => {
+    state.shown = !state.shown;
+    $("#log").classList.toggle("closed", !state.shown);
+    $("#bell").setAttribute("aria-expanded", String(state.shown));
+  };
+  $("#dnd").onclick = () => { state.dnd = !state.dnd; $("#dnd").setAttribute("aria-pressed", String(state.dnd)); render(); };
+  $("#purge").onclick = () => { items = []; render(); };
+  document.addEventListener("keydown", (e) => { if (e.key === "Escape" && state.shown) $("#bell").click(); });
+
+  document.querySelectorAll(".ctl .grp[data-key]").forEach((grp) => {
+    grp.addEventListener("click", (e) => {
+      const b = e.target.closest("button");
+      if (!b) return;
+      grp.querySelectorAll("button").forEach((x) => x.setAttribute("aria-pressed", String(x === b)));
+      if (grp.dataset.key === "variant") state.variant = b.dataset.v;
+      else document.body.classList.toggle("glass", b.dataset.v === "glass");
+      render();
+    });
+  });
+  $("#t-empty").onclick = () => { items = []; render(); };
+  $("#t-reset").onclick = () => { items = seed(); state.open.clear(); render(); };
+
+  render();
+</script>
+</body>
+</html>

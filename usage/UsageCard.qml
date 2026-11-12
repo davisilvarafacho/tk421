@@ -9,7 +9,7 @@ import "../theme"
 import "logic.js" as Logic
 
 // Dropdown card of the Claude usage chip: 5 h session and 7 d week limits. Fullscreen transparent overlay so a click
-// outside closes it; the card itself is translucent (Hyprland blurs it, layer rule in hypr/hyprland.lua).
+// outside closes it; the card hangs from the toolbar pill in the comms log language.
 // Prototype: prototypes/claude-usage/index.html. IPC: `usage toggle|refresh|status`.
 PanelWindow {
     id: win
@@ -27,7 +27,7 @@ PanelWindow {
     }
     color: "transparent"
     exclusionMode: ExclusionMode.Ignore
-    visible: open || card.opacity > 0.01
+    visible: open || card.height > 0
 
     WlrLayershell.layer: WlrLayer.Overlay
     WlrLayershell.namespace: "tk421-usage"
@@ -38,16 +38,17 @@ PanelWindow {
         easing.bezierCurve: [0.22, 1, 0.36, 1, 1, 1]
     }
 
-    // One limit: label, big percentage, meter, caption (StyledText, built from our own strings only).
+    // One limit: name and window on the left, the percentage on the right, the meter, then when it resets.
     component LimitRow: Item {
         id: limit
 
         property string label
+        property string span
         property int percent
         property string caption
 
         width: parent.width
-        height: 55
+        height: 62
 
         Text {
             id: labelText
@@ -55,11 +56,21 @@ PanelWindow {
             anchors.left: parent.left
             anchors.baseline: number.baseline
             text: limit.label
-            color: win.c.muted
-            font.family: Theme.displayFont
-            font.pixelSize: 9
+            color: Theme.imperial.text
+            font.family: Theme.fontFamily
+            font.pixelSize: 13
             font.weight: Font.Medium
-            font.letterSpacing: 2
+            renderType: Text.CurveRendering
+        }
+
+        Text {
+            anchors.left: labelText.right
+            anchors.leftMargin: 6
+            anchors.baseline: number.baseline
+            text: limit.span
+            color: Theme.imperial.faint
+            font.family: Theme.fontFamily
+            font.pixelSize: 12
             renderType: Text.CurveRendering
         }
 
@@ -69,9 +80,9 @@ PanelWindow {
             anchors.right: parent.right
             anchors.baseline: number.baseline
             text: "%"
-            color: win.c.muted
-            font.family: Theme.displayFont
-            font.pixelSize: 10
+            color: Theme.imperial.faint
+            font.family: Theme.fontFamily
+            font.pixelSize: 12
             renderType: Text.CurveRendering
         }
 
@@ -79,29 +90,30 @@ PanelWindow {
             id: number
 
             anchors.right: unit.left
-            anchors.rightMargin: 2
+            anchors.rightMargin: 1
             y: 0
             text: limit.percent
-            color: win.c.text
-            font.family: Theme.displayFont
-            font.pixelSize: 17
+            color: Theme.imperial.text
+            font.family: Theme.fontFamily
+            font.pixelSize: 20
             font.weight: Font.Medium
+            font.features: { "tnum": 1 }
             renderType: Text.CurveRendering
         }
 
         Meter {
-            y: 27
+            y: 32
             width: parent.width
-            trackHeight: 5
+            trackHeight: 4
             value: limit.percent
         }
 
         Text {
-            y: 40
+            y: 44
             width: parent.width
             text: limit.caption
             textFormat: Text.StyledText
-            color: win.c.muted
+            color: Theme.imperial.muted
             font.family: Theme.fontFamily
             font.pixelSize: 12
             renderType: Text.CurveRendering
@@ -170,108 +182,137 @@ PanelWindow {
         Keys.onEscapePressed: ClaudeUsage.open = false
     }
 
-    Rectangle {
+    // The card hangs from the toolbar pill like the comms log: the pill's width, opaque ink, a hairline on the sides and
+    // bottom only. Overlay layer, so it covers the pill's bottom hairline. Toolbar squares its corners (ClaudeUsage.docked).
+    Binding {
+        target: ClaudeUsage
+        property: "docked"
+        value: win.visible
+    }
+
+    Item {
         id: card
 
-        width: 308
-        height: content.implicitHeight + 36    // 18 px of padding above and below
-        x: parent.width - width - 30
-        y: 40 + (win.open ? 0 : -6)
-        radius: 16
-        color: Qt.alpha(win.c.surface, 0.72)
-        border.width: 1
-        border.color: win.c.border
-        clip: true
-        opacity: win.open ? 1 : 0
+        readonly property real full: content.implicitHeight + 16 + 14
 
-        Behavior on opacity { NumberAnimation { duration: win.open ? 180 : 120 } }
-        Behavior on y { Ease { duration: win.open ? 320 : 200 } }
-        Behavior on height { Ease { duration: 180 } }
+        width: Math.round(Notifications.dockWidth)
+        height: win.open ? full : 0
+        x: parent.width - width - 30
+        y: 33
+        clip: true
+
+        Behavior on height { Ease { duration: win.open ? 520 : 340 } }
 
         // Swallows clicks on the card so they do not reach the closing area.
         MouseArea { anchors.fill: parent }
 
+        Rectangle {
+            anchors.fill: parent
+            color: win.c.hairline
+            bottomLeftRadius: 22
+            bottomRightRadius: 22
+        }
+
+        Rectangle {
+            x: 1
+            width: parent.width - 2
+            height: parent.height - 1
+            color: win.c.ink
+            bottomLeftRadius: 21
+            bottomRightRadius: 21
+        }
+
         Column {
             id: content
 
-            x: 20
-            y: 18
-            width: parent.width - 40
+            x: 22
+            y: 16
+            width: parent.width - 44
+            opacity: win.open ? 1 : 0
 
+            Behavior on opacity {
+                SequentialAnimation {
+                    PauseAnimation { duration: win.open ? 140 : 0 }
+                    NumberAnimation { duration: win.open ? 320 : 140 }
+                }
+            }
+
+            // Header: spark and title, the plan on the right.
             Item {
                 width: parent.width
-                height: 15
+                height: 28
 
                 Image {
                     id: spark
 
                     anchors.verticalCenter: parent.verticalCenter
-                    width: 15
-                    height: 15
+                    width: 14
+                    height: 14
                     source: Qt.resolvedUrl("../assets/claude.svg")
-                    sourceSize: Qt.size(15, 15)
+                    sourceSize: Qt.size(14, 14)
                 }
 
                 Text {
                     anchors.left: spark.right
                     anchors.leftMargin: 9
                     anchors.verticalCenter: parent.verticalCenter
+                    anchors.verticalCenterOffset: 1
                     text: "CLAUDE"
                     color: win.c.text
                     font.family: Theme.displayFont
-                    font.pixelSize: 10
-                    font.weight: Font.Medium
-                    font.letterSpacing: 2.4
+                    font.pixelSize: 11
+                    font.letterSpacing: 2.2
                     renderType: Text.CurveRendering
                 }
 
                 Text {
                     anchors.right: parent.right
                     anchors.verticalCenter: parent.verticalCenter
-                    text: ClaudeUsage.plan !== "" ? "PLAN · " + ClaudeUsage.plan.toUpperCase() : "PLAN LIMITS"
+                    text: ClaudeUsage.plan !== "" ? ClaudeUsage.plan.charAt(0).toUpperCase() + ClaudeUsage.plan.slice(1) + " plan" : "Plan limits"
                     textFormat: Text.PlainText
-                    color: win.c.muted
-                    opacity: 0.6
-                    font.family: Theme.displayFont
-                    font.pixelSize: 9
-                    font.weight: Font.Medium
-                    font.letterSpacing: 2.2
+                    color: win.c.faint
+                    font.family: Theme.fontFamily
+                    font.pixelSize: 12
                     renderType: Text.CurveRendering
                 }
             }
 
             Item { width: 1; height: 14 }
 
+            // The limits: live when the read is ok; after a failed read the last values stay, dimmed, above the error.
             Column {
                 width: parent.width
-                spacing: 14
-                visible: win.ok
+                spacing: 12
+                visible: win.ok || ClaudeUsage.updatedAt > 0
+                opacity: win.ok ? 1 : 0.45
 
                 LimitRow {
-                    label: "SESSION · 5 H"
+                    label: "Session"
+                    span: "5 hours"
                     percent: ClaudeUsage.sessionPercent
                     caption: win.sessionCaption()
                 }
 
                 LimitRow {
-                    label: "WEEK · 7 D"
+                    label: "Week"
+                    span: "7 days"
                     percent: ClaudeUsage.weekPercent
                     caption: win.weekCaption()
                 }
             }
 
+            Item { width: 1; height: 14; visible: !win.ok && ClaudeUsage.updatedAt > 0 }
+
             Column {
                 width: parent.width
-                spacing: 10
+                spacing: 4
                 visible: !win.ok
 
                 Text {
-                    text: "OFFLINE"
-                    color: win.c.muted
-                    font.family: Theme.displayFont
-                    font.pixelSize: 10
-                    font.weight: Font.Medium
-                    font.letterSpacing: 2.6
+                    text: Logic.errorTitle(ClaudeUsage.error) + "."
+                    color: win.c.text
+                    font.family: Theme.fontFamily
+                    font.pixelSize: 13
                     renderType: Text.CurveRendering
                 }
 
@@ -282,86 +323,86 @@ PanelWindow {
                     wrapMode: Text.WordWrap
                     lineHeight: 1.25
                     color: win.c.muted
-                    opacity: 0.85
                     font.family: Theme.fontFamily
-                    font.pixelSize: 13
+                    font.pixelSize: 12
                     renderType: Text.CurveRendering
                 }
             }
 
-            Item { width: 1; height: 14 }
+            Item { width: 1; height: 12 }
 
             Item {
                 width: parent.width
-                height: 22
+                height: 28
 
                 Text {
-                    id: updatedText
-
                     anchors.left: parent.left
                     anchors.verticalCenter: parent.verticalCenter
                     text: ClaudeUsage.updatedAt > 0
                         ? (win.ok ? "Updated " : "Last read ") + Logic.ago(ClaudeUsage.updatedAt, win.now)
-                        : ClaudeUsage.busy ? "Reading…" : "Not read yet"
-                    color: win.c.muted
+                        : ClaudeUsage.busy ? "Reading…" : win.ok ? "Not read yet" : ""
+                    color: win.c.faint
                     font.family: Theme.fontFamily
                     font.pixelSize: 11
                     renderType: Text.CurveRendering
                 }
 
-                // Refresh: hover pill, glyph and label. The label sits on the baseline of the "Updated" text.
                 Rectangle {
                     id: refreshButton
 
                     anchors.right: parent.right
-                    anchors.rightMargin: -6
+                    anchors.rightMargin: -8
                     anchors.verticalCenter: parent.verticalCenter
-                    width: refreshGlyph.implicitWidth + 6 + refreshLabel.implicitWidth + 12
-                    height: 22
-                    radius: 7
-                    color: win.c.surfaceAlt
-                    opacity: refreshArea.containsMouse ? 1 : 0
+                    width: refreshRow.implicitWidth + 20
+                    height: 28
+                    radius: 8
+                    color: refreshArea.containsMouse && refreshButton.enabled ? win.c.surfaceAlt : "transparent"
+                    // A rate-limited endpoint only answers 429 again: refresh waits for the automatic retry.
+                    enabled: !ClaudeUsage.busy && ClaudeUsage.error !== "rate_limited"
+                    opacity: enabled || ClaudeUsage.busy ? 1 : 0.4
 
-                    Behavior on opacity { NumberAnimation { duration: 140 } }
-                }
+                    Behavior on color { ColorAnimation { duration: 120 } }
 
-                Text {
-                    id: refreshLabel
+                    Row {
+                        id: refreshRow
 
-                    anchors.right: parent.right
-                    anchors.baseline: updatedText.baseline
-                    text: "Refresh"
-                    color: refreshArea.containsMouse ? win.c.text : win.c.muted
-                    font.family: Theme.fontFamily
-                    font.pixelSize: 11
-                    renderType: Text.CurveRendering
-                }
+                        anchors.centerIn: parent
+                        spacing: 6
 
-                Icon {
-                    id: refreshGlyph
+                        Icon {
+                            anchors.verticalCenter: parent.verticalCenter
+                            name: "refresh"
+                            color: refreshArea.containsMouse ? win.c.text : win.c.muted
+                            size: Theme.iconSize.panel
 
-                    anchors.right: refreshLabel.left
-                    anchors.rightMargin: 6
-                    anchors.verticalCenter: refreshLabel.verticalCenter
-                    name: "refresh"
-                    color: refreshArea.containsMouse ? win.c.text : win.c.muted
-                    size: Theme.iconSize.panel
+                            RotationAnimator on rotation {
+                                from: 0
+                                to: 360
+                                duration: 800
+                                loops: Animation.Infinite
+                                running: ClaudeUsage.busy
+                            }
+                        }
 
-                    RotationAnimator on rotation {
-                        from: 0
-                        to: 360
-                        duration: 800
-                        loops: Animation.Infinite
-                        running: ClaudeUsage.busy
+                        Text {
+                            anchors.verticalCenter: parent.verticalCenter
+                            text: "Refresh"
+                            color: refreshArea.containsMouse ? win.c.text : win.c.muted
+                            font.family: Theme.fontFamily
+                            font.pixelSize: 12
+                            renderType: Text.CurveRendering
+                        }
                     }
-                }
 
-                MouseArea {
-                    id: refreshArea
+                    MouseArea {
+                        id: refreshArea
 
-                    anchors.fill: refreshButton
-                    hoverEnabled: true
-                    onClicked: ClaudeUsage.refresh()
+                        anchors.fill: parent
+                        hoverEnabled: true
+                        enabled: refreshButton.enabled
+                        cursorShape: Qt.PointingHandCursor
+                        onClicked: ClaudeUsage.refresh()
+                    }
                 }
             }
         }

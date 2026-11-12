@@ -27,6 +27,8 @@ Singleton {
     property bool centerOpen: false
     property bool settling: false       // centre just closed: unread flags clear after its close animation
     property bool islandOpen: false     // written by Island: an open island suppresses popups
+    property bool docked: false         // written by NotificationCenter while the log hangs from the toolbar pill
+    property real dockWidth: 360        // written by Toolbar: the log is exactly the pill's width
     property bool clearing: false       // clear() just ran, lets the list stagger its exit
 
     property var toast: null            // the entry shown as a popup, or null

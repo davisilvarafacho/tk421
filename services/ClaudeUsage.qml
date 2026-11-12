@@ -23,6 +23,7 @@ Singleton {
     property double updatedAt: 0        // ms since the epoch
 
     property bool open: false           // dropdown card, toggled by the bar chip
+    property bool docked: false         // written by UsageCard while the card hangs from the toolbar pill
     readonly property bool busy: fetchProcess.running
     readonly property int worstPercent: Math.max(sessionPercent, weekPercent)
 

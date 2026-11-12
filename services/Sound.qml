@@ -10,7 +10,7 @@ import "../dropdown/soundlogic.js" as Logic
 // Sound for the bar: the default output and input (volume, mute), the microphone state (on / muted / not recognised) and
 // the device lists for the quick switch. Real data from PipeWire; `mock` feeds the UI fake devices for visual checks.
 // The volume HUD of the island still follows services/Audio.qml, which tracks the same default sink.
-// Rules: dropdown/soundlogic.js. Prototype: prototypes/toolbar/index.html.
+// Rules: dropdown/soundlogic.js (device names lose their PipeWire profile suffix). Prototype: prototypes/toolbar/index.html.
 Singleton {
     id: root
 

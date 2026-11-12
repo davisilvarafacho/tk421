@@ -128,6 +128,37 @@ function dayLabel(ts, now) {
     return DAYS[d.getDay()] + " " + d.getDate() + " " + MONTHS[d.getMonth()]
 }
 
+// The comms log shows one entry per conversation: notifications with the same app and title (a Telegram chat, a
+// channel) fold together. history is newest first; so is each group's `entries`. Critical groups come first, then the
+// group with the newest activity. `section` is "Priority alpha" or the day label; `newSection` marks the first group
+// of each section.
+function conversations(history, now) {
+    var byKey = {}
+    var out = []
+    for (var i = 0; i < history.length; i++) {
+        var e = history[i]
+        var key = (e.label || e.appName || "") + "\u0000" + (e.summary || "")
+        var g = byKey[key]
+        if (!g) {
+            g = byKey[key] = { key: key, entries: [], critical: false, timestamp: e.timestamp }
+            out.push(g)
+        }
+        g.entries.push(e)
+        if (e.critical)
+            g.critical = true
+        if (e.timestamp > g.timestamp)
+            g.timestamp = e.timestamp
+    }
+    out.sort(function (a, b) {
+        return ((b.critical ? 1 : 0) - (a.critical ? 1 : 0)) || (b.timestamp - a.timestamp)
+    })
+    for (var j = 0; j < out.length; j++) {
+        out[j].section = out[j].critical ? "Priority alpha" : dayLabel(out[j].timestamp, now)
+        out[j].newSection = j === 0 || out[j].section !== out[j - 1].section
+    }
+    return out
+}
+
 function badgeText(n) {
     if (n <= 0)
         return ""

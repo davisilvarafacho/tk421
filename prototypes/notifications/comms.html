@@ -1,0 +1,376 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>TK-421 Comms Log</title>
+<style>
+  /* Comms log, third pass (2026-11-12), designed from zero with the frontend-design skill.
+     Concept: there is no separate drawer. The toolbar pill itself grows downward into the log, the way the island grows
+     into its card. Same width as the pill, same opaque ink and hairline, the toolbar icons stay where they were as the top row.
+     That morph is the one bold move; everything inside is a quiet typographic list: no cards, no dots, no outlined buttons.
+     Type: Orbitron only for the COMMS LOG title (Imperial labels are a project rule), Geist everywhere else, sentence case.
+     Palette: ink #000000, text #E8E6E3, muted #8E8B88, faint #5E5C60, chip #1A1A21, alert #D9808A.
+     Layout:
+        ╭──────────────────────────────╮   <- the toolbar pill, unchanged
+        │ ✳42%  ⌨ 🖧 ᛒ 🔊35% 🎙 [🔔] ⏻ │
+        │                              │
+        │ COMMS LOG        Silence  Purge
+        │                              │
+        │ ▢ jacaré 🐊             now  │   one entry per conversation, newest first
+        │   é isso mesmo               │   its lines underneath, oldest dimmer
+        │   belezinha                  │
+        │ ▢ # Desenvolvimento      2m  │
+        │   …                          │
+        ╰──────────────────────────────╯   grows to its content, never to the screen bottom
+     QML note: the bar window is 38 px high, so the sheet would be its own window under the bar, its top edge hidden behind the pill. */
+  :root {
+    color-scheme: dark;
+    --ink: #000;
+    --line: rgba(255, 255, 255, 0.09);
+    --text: #e8e6e3;
+    --muted: #8e8b88;
+    --faint: #5e5c60;
+    --chip: #1a1a21;
+    --hover: #0d0d10;
+    --alert: #d9808a;
+    --ease: cubic-bezier(0.22, 1, 0.36, 1);
+    --ui: "Geist", "Noto Color Emoji", sans-serif;
+    --display: "Orbitron", "Geist", sans-serif;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  html, body { height: 100%; }
+  body { background: #050505; font: 13px/1.4 var(--ui); color: var(--text); overflow: hidden; -webkit-font-smoothing: antialiased; }
+  button { font: inherit; color: inherit; background: none; border: 0; cursor: pointer; }
+  :focus-visible { outline: 1px solid #7d8db0; outline-offset: 2px; }
+
+  .ms {
+    font-family: "Material Symbols Sharp"; font-size: 16px; line-height: 1; font-weight: normal;
+    font-variation-settings: "FILL" 0, "wght" 300, "GRAD" 0, "opsz" 24;
+    display: inline-block; width: 1em; height: 1em; overflow: hidden; user-select: none;
+  }
+
+  .wall { position: fixed; inset: 0; background: url("wallpaper.jpg") center / cover no-repeat; filter: brightness(0.78); }
+
+  /* ---------- bar context ---------- */
+  .pill {
+    position: fixed; top: 4px; height: 30px; display: flex; align-items: center; gap: 4px; padding: 0 16px;
+    background: var(--ink); border: 1px solid var(--line); border-radius: 15px;
+  }
+  .tray { right: 0; }                     /* placed by JS: 8 px left of the toolbar */
+  .tray img { width: 15px; height: 15px; opacity: 0.62; margin: 0 4px; }
+  .cell {
+    height: 22px; min-width: 24px; padding: 0 4px; border-radius: 8px; color: #b5bac3;
+    display: inline-flex; align-items: center; justify-content: center; gap: 5px; transition: background-color 140ms, color 140ms;
+  }
+  .num { font: 500 10px/1 var(--display); letter-spacing: 0.4px; position: relative; top: 1px; }
+  .meter { width: 34px; height: 3px; background: #2a2a30; position: relative; }
+  .meter::after { content: ""; position: absolute; inset: 0 58% 0 0; background: #b5bac3; }
+  #bell:hover, #bell[aria-expanded="true"] { background: var(--chip); color: var(--text); }
+
+  /* ---------- the toolbar pill that becomes the log ---------- */
+  .dock {
+    position: fixed; top: 4px; right: 30px; height: 30px; z-index: 2;
+    background: var(--ink); border: 1px solid var(--line); border-radius: 15px; overflow: hidden;
+    transition: height 340ms var(--ease), border-radius 340ms var(--ease);
+  }
+  .dock.open { border-radius: 15px 15px 22px 22px; transition-duration: 520ms; }
+  .dock .bar { position: absolute; top: 0; right: 0; height: 28px; padding: 0 16px; display: flex; align-items: center; gap: 4px; }
+
+  .sheet {
+    position: absolute; top: 28px; left: 0; right: 0; padding: 18px 10px 12px;
+    opacity: 0; transform: translateY(-6px); transition: opacity 140ms, transform 340ms var(--ease);
+  }
+  .dock.open .sheet { opacity: 1; transform: none; transition: opacity 320ms 140ms, transform 520ms 60ms var(--ease); }
+
+  .head { display: flex; align-items: center; gap: 2px; padding: 0 6px 0 12px; height: 28px; }
+  .head h1 { font: 500 11px/1 var(--display); letter-spacing: 2.2px; position: relative; top: 1px; margin-right: auto; }
+  .head button {
+    height: 28px; padding: 0 10px; border-radius: 8px; color: var(--muted); font-size: 12px;
+    display: inline-flex; align-items: center; gap: 6px; transition: background-color 140ms, color 140ms;
+  }
+  .head button:hover { background: var(--chip); color: var(--text); }
+  .head button[aria-pressed="true"] { color: var(--text); }
+  .head button:disabled { opacity: 0.35; pointer-events: none; }
+
+  .silenced { display: none; margin: 10px 12px 2px; font-size: 12px; color: var(--muted); }
+  .dnd .silenced { display: block; }
+
+  .scroll { overflow-y: auto; margin-top: 10px; scrollbar-width: thin; scrollbar-color: #26262c transparent; }
+  .when-group { padding: 14px 12px 6px 44px; font-size: 11px; color: var(--faint); }
+  .when-group:first-child { padding-top: 4px; }
+
+  /* one conversation */
+  .entry {
+    position: relative; display: grid; grid-template-columns: 20px 1fr auto; column-gap: 12px;
+    padding: 10px 12px; border-radius: 14px; touch-action: pan-y;
+    transition: background-color 120ms;
+  }
+  .entry:hover, .entry:focus-within { background: var(--hover); }
+  .entry.leaving { transition: transform 260ms var(--ease), opacity 200ms; }
+  .icon { grid-row: 1 / span 9; width: 20px; height: 20px; display: grid; place-items: center; color: var(--muted); }
+  .icon img { width: 15px; height: 15px; opacity: 0.62; }
+  .who { font-size: 13.5px; font-weight: 500; line-height: 20px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .time { font-size: 11px; line-height: 20px; color: var(--faint); font-variant-numeric: tabular-nums; text-align: right; }
+  .msgs { grid-column: 2 / span 2; }
+  .msg { font-size: 12.5px; line-height: 18px; color: var(--muted); overflow-wrap: anywhere; }
+  .msg.old { color: var(--faint); }
+  .earlier { margin-top: 2px; font-size: 11.5px; color: var(--faint); padding: 2px 0; }
+  .earlier:hover { color: var(--text); }
+
+  .read .who { color: var(--muted); font-weight: 400; }
+  .read .msg { color: var(--faint); }
+  .alert .who { color: var(--alert); }
+  .alert .icon { color: var(--alert); }
+
+  /* the time gives way to the actions while hovered */
+  .tools { display: none; align-items: center; gap: 2px; margin: -2px -6px 0 0; }
+  .tools button { height: 22px; padding: 0 8px; border-radius: 7px; font-size: 11.5px; color: var(--muted); }
+  .tools button.x { width: 22px; padding: 0; display: grid; place-items: center; }
+  .tools button:hover { background: var(--chip); color: var(--text); }
+  .entry:hover .tools, .entry:focus-within .tools { display: inline-flex; }
+  .entry:hover .time, .entry:focus-within .time { display: none; }
+
+  .empty { display: none; padding: 26px 12px 18px; }
+  .empty p:first-child { font-size: 13px; }
+  .empty p:last-child { font-size: 12px; color: var(--muted); margin-top: 2px; }
+  .none .empty { display: block; }
+  .none .scroll { display: none; }
+
+  /* ---------- prototype controls ---------- */
+  .ctl {
+    position: fixed; left: 20px; bottom: 20px; display: flex; gap: 4px; padding: 6px; border-radius: 12px;
+    background: rgba(0, 0, 0, 0.8); border: 1px solid var(--line);
+  }
+  .ctl button { height: 28px; padding: 0 10px; border-radius: 8px; color: var(--muted); font-size: 12px; }
+  .ctl button:hover { background: var(--chip); color: var(--text); }
+
+  @media (prefers-reduced-motion: reduce) { *, *::before, *::after { transition-duration: 0ms !important; transition-delay: 0ms !important; } }
+</style>
+</head>
+<body>
+<div class="wall"></div>
+
+<div class="pill tray" id="tray" aria-label="Tray">
+  <img src="../../assets/tray/spotify.svg" alt="Spotify"><img src="../../assets/tray/telegram.svg" alt="Telegram">
+</div>
+
+<div class="dock" id="dock">
+  <div class="bar" id="bar" role="toolbar" aria-label="Toolbar">
+    <span class="cell"><span class="ms">asterisk</span><span class="num">42%</span><span class="meter"></span></span>
+    <span class="cell"><span class="ms">keyboard</span></span>
+    <span class="cell"><span class="ms">lan</span></span>
+    <span class="cell"><span class="ms">bluetooth</span></span>
+    <span class="cell"><span class="ms">volume_up</span><span class="num">35%</span></span>
+    <span class="cell"><span class="ms">mic</span></span>
+    <button class="cell" id="bell" aria-expanded="false" aria-controls="sheet" aria-label="Comms log"><span class="ms" id="bell-ic">notifications</span><span class="num" id="bell-n"></span></button>
+    <span class="cell"><span class="ms">power_settings_new</span></span>
+  </div>
+
+  <section class="sheet" id="sheet" aria-label="Comms log">
+    <div class="head">
+      <h1>COMMS LOG</h1>
+      <button id="dnd" aria-pressed="false"><span class="ms">notifications_paused</span>Silence</button>
+      <button id="purge">Purge</button>
+    </div>
+    <p class="silenced">Comms silenced. Critical alerts still come through.</p>
+    <div class="scroll" id="scroll"></div>
+    <div class="empty"><p>No transmissions.</p><p>All channels clear.</p></div>
+  </section>
+</div>
+
+<div class="ctl" aria-label="Prototype controls">
+  <button id="c-alert">Alerta crítico</button>
+  <button id="c-new">Nova mensagem</button>
+  <button id="c-reset">Repor</button>
+</div>
+
+<script>
+  const MIN = 60e3, HOUR = 60 * MIN;
+  const TG = "../../assets/tray/telegram.svg";
+  let now = Date.now();
+  const seed = () => [
+    { id: 1, app: "Screenshot", icon: "ms:screenshot_region", who: "Screenshot", msg: "Região capturada e copiada para o clipboard.", at: now - 10e3, unread: true },
+    { id: 2, app: "Telegram", icon: TG, who: "jacaré 🐊", msg: "belezinha", at: now - 20e3, unread: true, action: "Mark as read" },
+    { id: 3, app: "Telegram", icon: TG, who: "jacaré 🐊", msg: "é isso mesmo", at: now - 40e3, unread: true, action: "Mark as read" },
+    { id: 4, app: "Telegram", icon: TG, who: "# Desenvolvimento", msg: "jacaré 🐊: 👍 em \"assim que eu finalizar te aviso\"", at: now - 2 * MIN, unread: true },
+    { id: 5, app: "Telegram", icon: TG, who: "# Desenvolvimento", msg: "jacaré 🐊: 👀 em \"já estou olhando amigo\"", at: now - 2 * MIN - 9e3, unread: true },
+    { id: 6, app: "Telegram", icon: TG, who: "# Desenvolvimento", msg: "Bruna: subi a build nova no staging", at: now - 9 * MIN, unread: false },
+    { id: 7, app: "Telegram", icon: TG, who: "# Desenvolvimento", msg: "Caio: alguém viu o erro do deploy?", at: now - 14 * MIN, unread: false },
+    { id: 8, app: "Telegram", icon: TG, who: "# Desenvolvimento", msg: "Caio: bom dia", at: now - 3 * HOUR, unread: false },
+    { id: 9, app: "Claude Code", icon: "../../assets/claude-spark.svg", who: "Claude Code", msg: "Claude is waiting for your input", at: now - 5 * MIN, unread: false },
+    { id: 10, app: "Spotify", icon: "../../assets/tray/spotify.svg", who: "Wind of Change", msg: "Scorpions, Crazy World", at: now - 27 * HOUR, unread: false },
+  ];
+  let items = seed(), nextId = 100;
+  const expanded = new Set();
+  const st = { open: false, dnd: false };
+  const $ = (s) => document.querySelector(s);
+
+  const el = (tag, cls, text) => {
+    const e = document.createElement(tag);
+    if (cls) e.className = cls;
+    if (text !== undefined) e.textContent = text;          // app text never goes through innerHTML
+    return e;
+  };
+  const rel = (t) => {
+    const s = (now - t) / 1000;
+    if (s < 45) return "now";
+    if (s < 3600) return Math.round(s / 60) + "m";
+    if (s < 86400) return Math.round(s / 3600) + "h";
+    return Math.round(s / 86400) + "d";
+  };
+  const day = (t) => (now - t < 86400e3 ? "Today" : "Yesterday");
+  const icon = (src) => {
+    const box = el("span", "icon");
+    if (src.startsWith("ms:")) box.append(el("span", "ms", src.slice(3)));
+    else { const i = el("img"); i.src = src; i.alt = ""; box.append(i); }
+    return box;
+  };
+
+  // One entry per conversation (app + title). Alerts first, then newest activity first.
+  function conversations() {
+    const map = new Map();
+    for (const n of [...items].sort((a, b) => b.at - a.at)) {
+      const key = n.app + "\u0000" + n.who;
+      if (!map.has(key)) map.set(key, { key, ...n, list: [] });
+      map.get(key).list.push(n);
+    }
+    return [...map.values()].sort((a, b) => (b.alert ? 1 : 0) - (a.alert ? 1 : 0) || b.at - a.at);
+  }
+
+  function render() {
+    const box = $("#scroll");
+    box.replaceChildren();
+    let last = "";
+    for (const c of conversations()) {
+      const label = c.alert ? "Priority alpha" : day(c.at);
+      if (label !== last) { box.append(el("div", "when-group", label)); last = label; }
+
+      const unread = c.list.some((n) => n.unread);
+      const e = el("article", "entry" + (unread ? "" : " read") + (c.alert ? " alert" : ""));
+      e.dataset.key = c.key;
+      e.tabIndex = 0;
+      e.append(icon(c.icon), el("span", "who", c.who), el("span", "time", rel(c.at)));
+
+      const tools = el("span", "tools");
+      if (c.action && unread) {
+        const b = el("button", "", c.action);
+        b.onclick = () => { c.list.forEach((n) => (n.unread = false)); render(); };
+        tools.append(b);
+      }
+      const x = el("button", "x");
+      x.setAttribute("aria-label", "Dismiss " + c.who);
+      x.append(el("span", "ms", "close"));
+      x.onclick = () => dismiss(e, c.key);
+      tools.append(x);
+      e.append(tools);
+
+      // Lines oldest to newest, like a chat; the newest three by default.
+      const msgs = el("div", "msgs");
+      const lines = c.list.slice().reverse();
+      const open = expanded.has(c.key);
+      const shown = open ? lines : lines.slice(-3);
+      if (lines.length > shown.length) {
+        const more = el("button", "earlier", (lines.length - shown.length) + " earlier");
+        more.onclick = () => { expanded.add(c.key); render(); };
+        msgs.append(more);
+      }
+      shown.forEach((n, i) => msgs.append(el("div", "msg" + (i < shown.length - 1 ? " old" : ""), n.msg)));
+      e.append(msgs);
+
+      swipe(e, c.key);
+      box.append(e);
+    }
+
+    const unread = items.filter((n) => n.unread).length;
+    $("#bell-n").textContent = unread && !st.dnd ? String(unread) : "";
+    $("#bell-ic").textContent = st.dnd ? "notifications_paused" : "notifications";
+    $("#purge").disabled = items.length === 0;
+    $("#sheet").classList.toggle("none", items.length === 0);
+    $("#sheet").classList.toggle("dnd", st.dnd);
+    fit();
+  }
+
+  // The pill's height follows the content, capped by the screen.
+  function fit() {
+    const dock = $("#dock"), sheet = $("#sheet"), scroll = $("#scroll");
+    if (!st.open) { dock.style.height = "30px"; return; }
+    scroll.style.maxHeight = "none";
+    const cap = window.innerHeight - 4 - 12;
+    let h = 28 + sheet.scrollHeight + 2;
+    if (h > cap) { scroll.style.maxHeight = (scroll.offsetHeight - (h - cap)) + "px"; h = cap; }
+    dock.style.height = h + "px";
+  }
+
+  function dismiss(node, key) {
+    node.classList.add("leaving");
+    node.style.transform = "translateX(110%)";
+    node.style.opacity = "0";
+    setTimeout(() => { items = items.filter((n) => n.app + "\u0000" + n.who !== key); expanded.delete(key); render(); }, 220);
+  }
+
+  // Drag an entry sideways to dismiss it.
+  function swipe(node, key) {
+    let x0 = null, dx = 0;
+    node.addEventListener("pointerdown", (ev) => {
+      if (ev.button !== 0 || ev.target.closest("button")) return;
+      x0 = ev.clientX; dx = 0; node.setPointerCapture(ev.pointerId);
+    });
+    node.addEventListener("pointermove", (ev) => {
+      if (x0 === null) return;
+      dx = Math.max(0, ev.clientX - x0);
+      node.style.transform = `translateX(${dx}px)`;
+      node.style.opacity = String(1 - Math.min(dx / 240, 0.7));
+    });
+    const end = () => {
+      if (x0 === null) return;
+      x0 = null;
+      if (dx > 90) dismiss(node, key);
+      else { node.classList.add("leaving"); node.style.transform = ""; node.style.opacity = ""; setTimeout(() => node.classList.remove("leaving"), 260); }
+    };
+    node.addEventListener("pointerup", end);
+    node.addEventListener("pointercancel", end);
+  }
+
+  function setOpen(v) {
+    st.open = v;
+    $("#dock").classList.toggle("open", v);
+    $("#bell").setAttribute("aria-expanded", String(v));
+    fit();
+  }
+
+  // The dock is exactly the toolbar's width; the tray pill sits 8 px to its left.
+  function layout() {
+    const w = $("#bar").offsetWidth + 2;
+    $("#dock").style.width = w + "px";
+    $("#tray").style.right = (30 + w + 8) + "px";
+    fit();
+  }
+
+  $("#bell").onclick = () => setOpen(!st.open);
+  document.addEventListener("keydown", (e) => { if (e.key === "Escape" && st.open) setOpen(false); });
+  document.addEventListener("pointerdown", (e) => { if (st.open && !e.target.closest("#dock, .ctl")) setOpen(false); });
+  $("#dnd").onclick = () => { st.dnd = !st.dnd; $("#dnd").setAttribute("aria-pressed", String(st.dnd)); render(); };
+  $("#purge").onclick = () => { items = []; render(); };
+  $("#c-alert").onclick = () => {
+    if (!items.some((n) => n.alert))
+      items.push({ id: nextId++, app: "System", icon: "ms:hard_drive", who: "Disk almost full", msg: "/home has 3.1 GB left.", at: Date.now(), unread: true, alert: true });
+    now = Date.now(); render(); setOpen(true);
+  };
+  $("#c-new").onclick = () => {
+    items.push({ id: nextId++, app: "Telegram", icon: TG, who: "jacaré 🐊", msg: "bora almoçar?", at: Date.now(), unread: true, action: "Mark as read" });
+    now = Date.now(); render();
+  };
+  $("#c-reset").onclick = () => { now = Date.now(); items = seed(); expanded.clear(); st.dnd = false; $("#dnd").setAttribute("aria-pressed", "false"); render(); };
+  window.addEventListener("resize", layout);
+
+  render();
+  // #open skips the opening animation (for screenshots).
+  document.fonts.ready.then(() => {
+    layout();
+    if (location.hash === "#open") { document.body.style.setProperty("--ease", "steps(1, start)"); document.querySelectorAll(".dock, .sheet").forEach((n) => (n.style.transition = "none")); setOpen(true); }
+    else setTimeout(() => setOpen(true), 300);
+  });
+</script>
+</body>
+</html>

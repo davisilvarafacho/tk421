@@ -6,46 +6,61 @@ import QtQuick
 import "../components"
 import "../services"
 import "../theme"
+import "logic.js" as Logic
 
-// The comms log: a translucent drawer that slides in from the right edge, below the bar. Opened by the bell,
-// IPC `notifications toggleCenter` or SUPER+N. Prototype: prototypes/notifications/index.html
+// The comms log. It has no frame of its own: it hangs from the toolbar pill, exactly as wide, in the same opaque ink, so
+// the pill seems to grow down into it (the pill squares its bottom corners while `Notifications.docked`). One entry per
+// conversation (ConversationRow). Opened by the bell, IPC `notifications toggleCenter` or SUPER+N.
+// Prototype: prototypes/notifications/comms.html
 PanelWindow {
     id: win
 
     readonly property var c: Theme.imperial
     readonly property bool opened: Notifications.centerOpen
-    readonly property real drawerWidth: 360
-    readonly property real rightGap: 8      // the drawer floats this far from the right and bottom screen edges
     readonly property real bottomGap: 8
+    readonly property var groups: Logic.conversations(Notifications.history, now)
 
     property double now: Date.now()
+    property var expandedKeys: []
 
+    // The pill spans y 4..34; the log starts on its bottom hairline row and covers it.
     anchors {
         top: true
         right: true
         bottom: true
     }
-    margins.top: 40
-    implicitWidth: drawerWidth + rightGap
+    margins.top: 33
+    margins.right: 30
+    implicitWidth: Math.round(Notifications.dockWidth)
     color: "transparent"
     exclusionMode: ExclusionMode.Ignore
 
-    // Stay mapped while the slide-out plays.
-    visible: opened || panel.x < win.width
+    // Stay mapped while the close animation plays.
+    visible: opened || sheet.height > 0
 
     WlrLayershell.layer: WlrLayer.Top
     WlrLayershell.namespace: "tk421-notifications"
     WlrLayershell.keyboardFocus: opened ? WlrKeyboardFocus.OnDemand : WlrKeyboardFocus.None
 
-    // Only the drawer takes input; the rest of the window is click-through.
-    mask: Region { item: panel }
+    // Only the log takes input; the rest of the window is click-through.
+    mask: Region { item: sheet }
+
+    Binding {
+        target: Notifications
+        property: "docked"
+        value: win.visible
+    }
 
     component Ease: NumberAnimation {
         easing.type: Easing.BezierSpline
         easing.bezierCurve: [0.22, 1, 0.36, 1, 1, 1]
     }
 
-    onOpenedChanged: now = Date.now()
+    onOpenedChanged: {
+        now = Date.now()
+        if (!opened)
+            expandedKeys = []
+    }
 
     // A click outside closes it. Held while a screenshot is being taken (Dropdown.held), so SUPER+S can capture it.
     HyprlandFocusGrab {
@@ -60,7 +75,7 @@ PanelWindow {
         onActivated: Notifications.setCenterOpen(false)
     }
 
-    // Relative times ("4M") stay fresh while it is open.
+    // Relative times ("4m") stay fresh while it is open.
     Timer {
         interval: 30000
         repeat: true
@@ -68,30 +83,41 @@ PanelWindow {
         onTriggered: win.now = Date.now()
     }
 
-    // A floating card: the window reaches the right screen edge so the slide starts off-screen, the card keeps `rightGap` and
-    // `bottomGap` from the right and bottom edges. The fill is translucent; Hyprland blurs what is behind it (layer rule in hypr/hyprland.lua).
-    Rectangle {
-        id: panel
+    Item {
+        id: sheet
 
-        x: win.opened ? 0 : win.width
-        y: 0
-        width: win.drawerWidth
-        height: win.height - win.bottomGap
-        radius: 20
-        color: Qt.alpha(win.c.surface, 0.72)
-        border.width: 1
-        border.color: win.c.border
+        // Height follows the content, capped by the screen.
+        readonly property real full: Math.min(win.height - win.bottomGap,
+            body.y + (list.count > 0 ? list.contentHeight : empty.height) + 12)
+
+        width: win.width
+        height: win.opened ? full : 0
         clip: true
 
-        Behavior on x { Ease { duration: win.opened ? 520 : 340 } }
+        Behavior on height { Ease { duration: win.opened ? 520 : 340 } }
+
+        // The hairline on the sides and bottom (no top edge: the pill is there), then the ink inside it.
+        Rectangle {
+            anchors.fill: parent
+            color: win.c.hairline
+            bottomLeftRadius: 22
+            bottomRightRadius: 22
+        }
+
+        Rectangle {
+            x: 1
+            width: parent.width - 2
+            height: parent.height - 1
+            color: win.c.ink
+            bottomLeftRadius: 21
+            bottomRightRadius: 21
+        }
 
         Item {
             id: content
 
-            x: 1
-            y: 1
-            width: panel.width - 2
-            height: panel.height - 2
+            width: parent.width
+            height: sheet.full
             opacity: win.opened ? 1 : 0
 
             Behavior on opacity {
@@ -101,38 +127,24 @@ PanelWindow {
                 }
             }
 
-            // Header: title, unread count, Do Not Disturb, purge.
+            // Header: title, silence, purge.
             Item {
                 id: header
 
-                x: 16
-                width: parent.width - 32
-                height: 48
+                x: 22
+                y: 16
+                width: parent.width - 22 - 16
+                height: 28
 
-                Row {
+                Text {
                     anchors.verticalCenter: parent.verticalCenter
                     anchors.verticalCenterOffset: 1
-                    spacing: 8
-
-                    Text {
-                        text: "COMMS LOG"
-                        color: win.c.text
-                        renderType: Text.CurveRendering
-                        font.family: Theme.displayFont
-                        font.pixelSize: 11
-                        font.letterSpacing: 2.2
-                    }
-
-                    Text {
-                        anchors.baseline: parent.children[0].baseline
-                        visible: Notifications.unreadCount > 0
-                        text: Notifications.unreadCount + " UNREAD"
-                        color: win.c.muted
-                        renderType: Text.CurveRendering
-                        font.family: Theme.displayFont
-                        font.pixelSize: 9
-                        font.letterSpacing: 1.6
-                    }
+                    text: "COMMS LOG"
+                    color: win.c.text
+                    renderType: Text.CurveRendering
+                    font.family: Theme.displayFont
+                    font.pixelSize: 11
+                    font.letterSpacing: 2.2
                 }
 
                 Row {
@@ -140,157 +152,102 @@ PanelWindow {
                     anchors.verticalCenter: parent.verticalCenter
                     spacing: 2
 
-                    // Do Not Disturb.
-                    Rectangle {
-                        width: 28
-                        height: 28
-                        radius: 8
-                        color: Notifications.dnd ? win.c.accentDim
-                            : dndArea.containsMouse ? Qt.rgba(0.91, 0.9, 0.89, 0.06) : "transparent"
-
-                        Behavior on color { ColorAnimation { duration: 140 } }
-
-                        Icon {
-                            anchors.centerIn: parent
-                            name: "notifications_paused"
-                            color: Notifications.dnd || dndArea.containsMouse ? win.c.text : win.c.muted
-                            size: Theme.iconSize.panel
-                        }
-
-                        MouseArea {
-                            id: dndArea
-
-                            anchors.fill: parent
-                            hoverEnabled: true
-                            cursorShape: Qt.PointingHandCursor
-                            onClicked: Notifications.setDnd(!Notifications.dnd)
-                        }
+                    HeadButton {
+                        icon: "notifications_paused"
+                        label: "Silence"
+                        lit: Notifications.dnd
+                        onClicked: Notifications.setDnd(!Notifications.dnd)
                     }
 
-                    ActionButton {
-                        text: "Purge"
+                    HeadButton {
+                        label: "Purge"
                         enabled: Notifications.history.length > 0
-                        opacity: enabled ? 1 : 0.3
+                        opacity: enabled ? 1 : 0.35
                         onClicked: Notifications.clear()
                     }
                 }
             }
 
-            // Do Not Disturb strip.
+            Text {
+                id: silenced
+
+                x: 22
+                y: header.y + header.height + 8
+                width: parent.width - 44
+                height: Notifications.dnd ? implicitHeight : 0
+                visible: Notifications.dnd
+                text: "Comms silenced. Critical alerts still come through."
+                color: win.c.muted
+                wrapMode: Text.Wrap
+                renderType: Text.CurveRendering
+                font.family: Theme.fontFamily
+                font.pixelSize: 12
+            }
+
             Item {
-                id: strip
+                id: body
 
-                x: 16
-                y: header.height
-                width: header.width
-                height: Notifications.dnd ? 30 : 0
-                opacity: Notifications.dnd ? 1 : 0
-                clip: true
+                x: 10
+                y: silenced.y + silenced.height + (Notifications.dnd ? 10 : 2)
+                width: parent.width - 20
+                height: sheet.full - y - 12
 
-                Behavior on height { Ease { duration: 300 } }
-                Behavior on opacity { NumberAnimation { duration: 200 } }
+                ListView {
+                    id: list
 
-                Row {
-                    anchors.verticalCenter: parent.verticalCenter
-                    spacing: 8
+                    anchors.fill: parent
+                    clip: true
+                    boundsBehavior: Flickable.StopAtBounds
+                    visible: count > 0
 
-                    Rectangle {
-                        anchors.verticalCenter: parent.verticalCenter
-                        width: 5
-                        height: 5
-                        radius: 2.5
-                        color: win.c.accent
+                    model: ScriptModel {
+                        values: win.groups
+                        objectProp: "key"
                     }
 
+                    delegate: ConversationRow {
+                        now: win.now
+                        expanded: win.expandedKeys.indexOf(modelData.key) >= 0
+                        onExpandRequested: win.expandedKeys = win.expandedKeys.concat([modelData.key])
+                    }
+
+                    add: Transition {
+                        NumberAnimation { property: "opacity"; from: 0; to: 1; duration: 260 }
+                    }
+
+                    remove: Transition {
+                        NumberAnimation { property: "opacity"; to: 0; duration: 140 }
+                    }
+
+                    displaced: Transition {
+                        NumberAnimation { property: "y"; duration: 280; easing.type: Easing.OutCubic }
+                    }
+                }
+
+                Column {
+                    id: empty
+
+                    x: 12
+                    y: 14
+                    height: 60
+                    spacing: 2
+                    visible: list.count === 0
+
                     Text {
-                        anchors.verticalCenter: parent.verticalCenter
-                        anchors.verticalCenterOffset: 1
-                        text: "COMMS SILENCED"
+                        text: "No transmissions."
                         color: win.c.text
                         renderType: Text.CurveRendering
-                        font.family: Theme.displayFont
-                        font.pixelSize: 9
-                        font.letterSpacing: 1.6
+                        font.family: Theme.fontFamily
+                        font.pixelSize: 13
                     }
 
                     Text {
-                        anchors.verticalCenter: parent.verticalCenter
-                        text: "· critical still gets through"
+                        text: "All channels clear."
                         color: win.c.muted
                         renderType: Text.CurveRendering
                         font.family: Theme.fontFamily
-                        font.pixelSize: 11
+                        font.pixelSize: 12
                     }
-                }
-            }
-
-            ListView {
-                id: list
-
-                anchors.top: strip.bottom
-                anchors.bottom: parent.bottom
-                anchors.bottomMargin: 12
-                width: parent.width
-                clip: true
-                boundsBehavior: Flickable.StopAtBounds
-                visible: count > 0
-
-                model: ScriptModel {
-                    values: Notifications.history
-                    objectProp: "uid"
-                }
-
-                delegate: NotificationItem {
-                    now: win.now
-                }
-
-                add: Transition {
-                    ParallelAnimation {
-                        NumberAnimation { property: "opacity"; from: 0; to: 1; duration: 320 }
-                        NumberAnimation { property: "y"; from: -10; duration: 460; easing.type: Easing.OutCubic }
-                    }
-                }
-
-                remove: Transition {
-                    NumberAnimation { property: "opacity"; to: 0; duration: 160 }
-                }
-
-                displaced: Transition {
-                    NumberAnimation { property: "y"; duration: 300; easing.type: Easing.OutCubic }
-                }
-            }
-
-            // Empty state.
-            Column {
-                anchors.horizontalCenter: parent.horizontalCenter
-                y: parent.height * 0.3
-                spacing: 8
-                visible: list.count === 0
-
-                Icon {
-                    anchors.horizontalCenter: parent.horizontalCenter
-                    name: "notifications_paused"
-                    color: win.c.muted
-                    size: Theme.iconSize.hero
-                }
-
-                Text {
-                    anchors.horizontalCenter: parent.horizontalCenter
-                    text: "NO TRANSMISSIONS"
-                    color: win.c.text
-                    renderType: Text.CurveRendering
-                    font.family: Theme.displayFont
-                    font.pixelSize: 10
-                    font.letterSpacing: 2
-                }
-
-                Text {
-                    anchors.horizontalCenter: parent.horizontalCenter
-                    text: "All channels clear."
-                    color: win.c.muted
-                    renderType: Text.CurveRendering
-                    font.family: Theme.fontFamily
-                    font.pixelSize: 12
                 }
             }
         }

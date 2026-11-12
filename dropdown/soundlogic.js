@@ -45,10 +45,19 @@ function clean(text, max) {
     return s.slice(0, end) + "…"
 }
 
-// A device name from a PipeWire node: description, then nickname, then the node name. Cleaned and limited.
+// A device name from a PipeWire node: description, then nickname, then the node name. The profile suffix goes first
+// (shortName), then it is cleaned and limited.
 function deviceName(node) {
-    var n = clean(node && (node.description || node.nickname || node.name), 40)
+    var n = clean(shortName(node && (node.description || node.nickname || node.name)), 40)
     return n !== "" ? n : "Unknown device"
+}
+
+// The name shown in the panel: the PipeWire profile suffix ("Analog Stereo", "Digital Stereo (HDMI 2)") says nothing
+// the detail line does not, so it goes (with a trailing "[monitor]" tag). Never returns an empty string.
+function shortName(name) {
+    var s = String(name || "")
+    var t = s.replace(/\s+(Analog|Digital|Pro)(\s+(Stereo|Mono|Surround\s+[0-9.]+))?(\s*\([^)]*\))?(\s*\[[^\]]*\])?\s*$/i, "")
+    return t.trim() !== "" ? t.trim() : s
 }
 
 function deviceGlyph(name, props, isOutput) {

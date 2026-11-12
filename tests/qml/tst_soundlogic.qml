@@ -113,12 +113,23 @@ TestCase {
     }
 
     function test_deviceName_is_cleaned_and_falls_back() {
-        compare(Sound.deviceName({ description: "Built-in Audio Analog Stereo", nickname: "x", name: "alsa_output.pci" }), "Built-in Audio Analog Stereo")
+        compare(Sound.deviceName({ description: "Built-in Audio Analog Stereo", nickname: "x", name: "alsa_output.pci" }), "Built-in Audio")
+        compare(Sound.deviceName({ description: "Navi 31 HDMI/DP Audio Digital Stereo (HDMI 2)" }), "Navi 31 HDMI/DP Audio")
         compare(Sound.deviceName({ description: "", nickname: "Nick", name: "alsa_output.pci" }), "Nick")
         compare(Sound.deviceName({ description: "", nickname: "", name: "alsa_output.pci" }), "alsa_output.pci")
         compare(Sound.deviceName({ description: "Evil ‮name\n\u0007", nickname: "", name: "" }), "Evil name")
         compare(Sound.deviceName({ description: "x".repeat(100), nickname: "", name: "" }).length, 40)
         compare(Sound.deviceName({}), "Unknown device")
+    }
+
+    function test_shortName_drops_the_profile_suffix() {
+        compare(Sound.shortName("Built-in Audio Analog Stereo"), "Built-in Audio")
+        compare(Sound.shortName("Navi 31 HDMI/DP Audio Digital Stereo (HDMI 2)"), "Navi 31 HDMI/DP Audio")
+        compare(Sound.shortName("CORSAIR HS80 RGB Wireless Gaming Receiver Analog Stereo"), "CORSAIR HS80 RGB Wireless Gaming Receiver")
+        compare(Sound.shortName("Navi 31 HDMI/DP Audio Digital Stereo (HDMI) [SFEF-3015]"), "Navi 31 HDMI/DP Audio")
+        compare(Sound.shortName("Analog Stereo"), "Analog Stereo")
+        compare(Sound.shortName("USB Mic"), "USB Mic")
+        compare(Sound.shortName(""), "")
     }
 
     // Every name these functions can return must be in the icon table.

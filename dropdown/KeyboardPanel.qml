@@ -7,6 +7,8 @@ import "../theme"
 // Keyboard dropdown: the Basike Ba-KEY391 drawn as isometric hairlines, lit the way the keyboard is lit, and the controls
 // the keyboard really has. The projection and the face technique come from iso-glow (MIT, April Zhu), itself based on
 // iso-figure (MIT, Tolga Cohce). Every change goes through services/Keyboard.qml. Prototype: prototypes/keyboard/index.html.
+// It hangs from the toolbar pill in the comms log language: Orbitron only for the title, Geist sentence case, chip-filled
+// selects and segmented controls, monochrome levels.
 Item {
     id: panel
 
@@ -34,7 +36,7 @@ Item {
     readonly property var colorNames: ["red", "green", "blue", "yellow", "purple", "cyan", "white", "rainbow"]
     readonly property var colorRgb: [[255, 45, 45], [45, 255, 90], [45, 91, 255], [255, 224, 45], [176, 45, 255], [45, 224, 255], [255, 255, 255]]
     readonly property var sideModes: ["OFF", "RAINBOW", "CYCLE", "WHITE", "PULSE"]
-    readonly property var effectOptions: effects.map(e => (e[0] < 10 ? "0" : "") + e[0] + "  " + e[1])
+    readonly property var effectOptions: effects.map(e => e[1])
 
     // Geometry in the prototype's units: the keyboard is kbW x kbD, kbBase thick, keys kbKeyH high.
     readonly property real kbW: 372
@@ -54,7 +56,7 @@ Item {
     property real animT: 0
 
     width: parent.width
-    implicitHeight: column.implicitHeight + 28
+    implicitHeight: column.y + column.implicitHeight + 16
 
     function buildKeys() {
         const k = []
@@ -295,34 +297,22 @@ Item {
         ctx.restore()
     }
 
-    // A section label with a hairline to the right edge.
+    // A section label (comms log language: plain, faint, no rule).
     component Section: Item {
         id: section
 
         property string label: ""
 
         width: column.width
-        height: 12
+        height: 22
 
         Text {
-            id: sectionLabel
-
+            anchors.bottom: parent.bottom
             text: section.label
-            color: panel.c.muted
+            color: Theme.imperial.faint
             renderType: Text.CurveRendering
-            font.family: Theme.displayFont
-            font.pixelSize: 9
-            font.letterSpacing: 1.8
-            font.capitalization: Font.AllUppercase
-        }
-
-        Rectangle {
-            x: sectionLabel.implicitWidth + 10
-            anchors.verticalCenter: parent.verticalCenter
-            width: section.width - x
-            height: 1
-            color: panel.c.border
-            opacity: 0.7
+            font.family: Theme.fontFamily
+            font.pixelSize: 11
         }
     }
 
@@ -334,21 +324,21 @@ Item {
         property bool disabled: false
 
         width: column.width
-        height: Math.max(24, childrenRect.height)
-        opacity: disabled ? 0.35 : 1
+        height: Math.max(28, childrenRect.height)
+        // Every control writes to the keyboard: with it offline nothing here can act.
+        enabled: !disabled && Keyboard.online
+        opacity: disabled || !Keyboard.online ? 0.35 : 1
 
         Text {
             width: 84
-            height: 24
+            height: 28
             verticalAlignment: Text.AlignVCenter
             text: setting.label
-            color: panel.c.muted
+            color: Theme.imperial.muted
             elide: Text.ElideRight
             renderType: Text.CurveRendering
-            font.family: Theme.displayFont
-            font.pixelSize: 9
-            font.letterSpacing: 1.2
-            font.capitalization: Font.AllUppercase
+            font.family: Theme.fontFamily
+            font.pixelSize: 12
         }
     }
 
@@ -379,24 +369,24 @@ Item {
             id: header
 
             width: select.width
-            height: 24
-            radius: 4
-            color: select.expanded ? panel.c.accentDim : "transparent"
-            border.width: 1
-            border.color: select.expanded ? panel.c.accent : (headerArea.containsMouse ? panel.c.muted : panel.c.border)
+            height: 28
+            radius: 8
+            color: headerArea.containsMouse || select.expanded ? "#24242C" : Theme.imperial.surfaceAlt
             opacity: select.disabled ? 0.35 : 1
 
+            Behavior on color { ColorAnimation { duration: 120 } }
+
             Text {
-                x: 8
-                width: parent.width - 32
+                x: 10
+                width: parent.width - 36
                 anchors.verticalCenter: parent.verticalCenter
                 text: select.current >= 0 ? select.options[select.current] : select.placeholder
                 textFormat: Text.PlainText
                 elide: Text.ElideRight
-                color: panel.c.text
+                color: select.current >= 0 ? Theme.imperial.text : Theme.imperial.muted
                 renderType: Text.CurveRendering
                 font.family: Theme.fontFamily
-                font.pixelSize: 11
+                font.pixelSize: 12
             }
 
             Icon {
@@ -405,12 +395,10 @@ Item {
                 anchors.verticalCenter: parent.verticalCenter
                 name: "expand_more"
                 rotation: select.expanded ? 180 : 0
-                color: panel.c.muted
+                color: Theme.imperial.muted
                 size: Theme.iconSize.panel
 
-                Behavior on rotation {
-                    NumberAnimation { duration: 140 }
-                }
+                Behavior on rotation { NumberAnimation { duration: 140 } }
             }
 
             MouseArea {
@@ -430,21 +418,20 @@ Item {
 
             y: header.height + 4
             width: select.width
-            height: Math.min(list.contentHeight, 132)
+            height: Math.min(list.contentHeight + 8, 164)
             visible: select.expanded
-            radius: 4
-            color: panel.c.surface
-            border.width: 1
-            border.color: panel.c.border
+            radius: 10
+            color: "#0D0D10"
             clip: true
 
             ListView {
                 id: list
 
                 anchors.fill: parent
-                anchors.margins: 1
+                anchors.margins: 4
                 model: select.options
-                interactive: false
+                interactive: contentHeight > height
+                boundsBehavior: Flickable.StopAtBounds
                 currentIndex: select.current
                 onCurrentIndexChanged: if (currentIndex >= 0) positionViewAtIndex(currentIndex, ListView.Contain)
 
@@ -454,19 +441,35 @@ Item {
                     required property int index
                     required property string modelData
 
+                    readonly property bool chosen: row.index === select.current
+
                     width: list.width
-                    height: 22
-                    color: row.index === select.current ? panel.c.accentDim : (rowArea.containsMouse ? panel.c.surfaceAlt : "transparent")
+                    height: 26
+                    radius: 7
+                    color: rowArea.containsMouse ? Theme.imperial.surfaceAlt : "transparent"
 
                     Text {
                         x: 8
+                        width: parent.width - 36
                         anchors.verticalCenter: parent.verticalCenter
                         text: row.modelData
                         textFormat: Text.PlainText
-                        color: row.index === select.current ? panel.c.text : panel.c.muted
+                        elide: Text.ElideRight
+                        color: row.chosen || rowArea.containsMouse ? Theme.imperial.text : Theme.imperial.muted
                         renderType: Text.CurveRendering
                         font.family: Theme.fontFamily
-                        font.pixelSize: 10
+                        font.pixelSize: 12
+                        font.weight: row.chosen ? Font.Medium : Font.Normal
+                    }
+
+                    Icon {
+                        visible: row.chosen
+                        anchors.right: parent.right
+                        anchors.rightMargin: 8
+                        anchors.verticalCenter: parent.verticalCenter
+                        name: "check"
+                        color: Theme.imperial.text
+                        size: Theme.iconSize.panel
                     }
 
                     MouseArea {
@@ -486,7 +489,8 @@ Item {
         }
     }
 
-    // One row of cells. `steps` fills the cells up to the value; otherwise only the chosen cell is lit.
+    // `steps`: a segmented level bar, filled up to the value (white, like the volume sliders).
+    // Otherwise: a segmented choice, the chosen segment carries the chip fill.
     component Cells: Row {
         id: cells
 
@@ -498,35 +502,43 @@ Item {
 
         signal picked(int index)
 
-        spacing: 3
+        height: 28
+        spacing: cells.steps ? 3 : 2
 
         Repeater {
             model: cells.count
 
-            delegate: Rectangle {
+            delegate: Item {
                 id: cell
 
                 required property int index
 
-                width: (cells.width - cells.spacing * (cells.count - 1)) / cells.count
-                height: cells.steps ? 14 : 22
-                radius: 4
-                color: cells.steps ? (cell.index <= cells.value ? panel.c.accent : "transparent")
-                    : (cell.index === cells.value ? panel.c.accentDim : "transparent")
-                border.width: 1
-                border.color: cell.index === cells.value ? (cells.steps ? panel.c.text : panel.c.accent)
-                    : (cellArea.containsMouse && !cells.disabled ? panel.c.muted : panel.c.border)
+                readonly property bool lit: cells.steps ? cell.index <= cells.value : cell.index === cells.value
 
-                Text {
-                    anchors.centerIn: parent
-                    visible: !cells.steps
-                    text: cells.labels[cell.index] || ""
-                    textFormat: Text.PlainText
-                    color: cell.index === cells.value ? panel.c.text : panel.c.muted
-                    renderType: Text.CurveRendering
-                    font.family: Theme.displayFont
-                    font.pixelSize: 9
-                    font.letterSpacing: 0.8
+                width: (cells.width - cells.spacing * (cells.count - 1)) / cells.count
+                height: cells.height
+
+                Rectangle {
+                    anchors.verticalCenter: parent.verticalCenter
+                    width: parent.width
+                    height: cells.steps ? 6 : 28
+                    radius: cells.steps ? 3 : 8
+                    color: cells.steps
+                        ? (cell.lit ? Theme.imperial.text : cellArea.containsMouse && !cells.disabled ? "#2E2E36" : Theme.imperial.surfaceAlt)
+                        : (cell.lit ? Theme.imperial.surfaceAlt : cellArea.containsMouse && !cells.disabled ? "#16161B" : Theme.imperial.rowHover)
+
+                    Behavior on color { ColorAnimation { duration: 120 } }
+
+                    Text {
+                        anchors.centerIn: parent
+                        visible: !cells.steps
+                        text: cells.labels[cell.index] || ""
+                        textFormat: Text.PlainText
+                        color: cell.lit || cellArea.containsMouse ? Theme.imperial.text : Theme.imperial.muted
+                        renderType: Text.CurveRendering
+                        font.family: Theme.fontFamily
+                        font.pixelSize: 12
+                    }
                 }
 
                 MouseArea {
@@ -537,6 +549,11 @@ Item {
                     enabled: !cells.disabled
                     cursorShape: Qt.PointingHandCursor
                     onClicked: cells.picked(cell.index)
+                    onWheel: wheel => {
+                        const next = Math.max(0, Math.min(cells.count - 1, cells.value + (wheel.angleDelta.y > 0 ? 1 : -1)))
+                        if (next !== cells.value)
+                            cells.picked(next)
+                    }
                 }
             }
         }
@@ -548,70 +565,39 @@ Item {
 
     readonly property string effectLabel: effectInfo(Keyboard.effect)[1] !== "Effect " + Keyboard.effect
         ? effectInfo(Keyboard.effect)[1] : Keyboard.effectName
-    readonly property string stateLabel: effectInfo(Keyboard.effect)[2] === "off" ? "LIGHTS OUT"
-        : (Keyboard.effectHasColor ? (Keyboard.color === 7 ? "RAINBOW" : colorNames[Keyboard.color].toUpperCase()) : "EFFECT COLOURS")
+    readonly property string stateLabel: effectInfo(Keyboard.effect)[2] === "off" ? "Lights out"
+        : (Keyboard.effectHasColor ? (Keyboard.color === 7 ? "Rainbow" : colorNames[Keyboard.color].charAt(0).toUpperCase() + colorNames[Keyboard.color].slice(1))
+            : "Effect colours")
+
+    PanelHeader {
+        id: header
+
+        x: 22
+        y: 16
+        width: parent.width - 44
+        title: "BA-KEY391"
+        detail: Keyboard.sending ? "Sending" : Keyboard.writing ? "Writing" : Keyboard.online ? "USB cable" : "Offline"
+        detailColor: Keyboard.online ? Theme.imperial.faint : Theme.imperial.dangerText
+    }
 
     Column {
         id: column
 
-        x: 14
-        y: 14
-        width: panel.width - 28
-        spacing: 12
+        x: 22
+        y: header.y + header.height + 8
+        width: panel.width - 44
+        spacing: 10
 
-        // header: the name, and the link to the keyboard
+        // The figure on the ink itself, with the effect and its state under it.
         Item {
             width: column.width
-            height: 16
-
-            Text {
-                text: "BA-KEY391"
-                color: panel.c.text
-                renderType: Text.CurveRendering
-                font.family: Theme.displayFont
-                font.pixelSize: 11
-                font.letterSpacing: 1.6
-            }
-
-            Row {
-                anchors.right: parent.right
-                anchors.verticalCenter: parent.verticalCenter
-                spacing: 6
-
-                Rectangle {
-                    anchors.verticalCenter: parent.verticalCenter
-                    width: 6
-                    height: 6
-                    radius: 3
-                    color: Keyboard.online ? panel.c.accent : panel.c.danger
-                }
-
-                Text {
-                    text: Keyboard.sending ? "SENDING" : Keyboard.writing ? "WRITING" : (Keyboard.online ? "USB · CABLE" : "OFFLINE")
-                    color: panel.c.muted
-                    renderType: Text.CurveRendering
-                    font.family: Theme.displayFont
-                    font.pixelSize: 9
-                    font.letterSpacing: 1.2
-                }
-            }
-        }
-
-        // the figure, with the effect and its state under it
-        Rectangle {
-            width: column.width
-            height: fig.height + 36
-            radius: 14
-            color: panel.c.surface
-            border.width: 1
-            border.color: panel.c.border
+            height: fig.height + 22
 
             Canvas {
                 id: fig
 
-                x: 4
-                y: 4
-                width: parent.width - 8
+                x: -6
+                width: parent.width + 12
                 height: width / 1.6
 
                 onPaint: {
@@ -623,29 +609,25 @@ Item {
             }
 
             Text {
-                x: 12
-                y: fig.height + 12
+                anchors.bottom: parent.bottom
                 text: panel.effectLabel
                 textFormat: Text.PlainText
-                color: panel.c.muted
+                color: panel.c.text
                 renderType: Text.CurveRendering
-                font.family: Theme.displayFont
-                font.pixelSize: 9
-                font.letterSpacing: 1.2
-                font.capitalization: Font.AllUppercase
+                font.family: Theme.fontFamily
+                font.pixelSize: 13
+                font.weight: Font.Medium
             }
 
             Text {
                 anchors.right: parent.right
-                anchors.rightMargin: 12
-                y: fig.height + 12
+                anchors.bottom: parent.bottom
                 text: panel.stateLabel
                 textFormat: Text.PlainText
-                color: panel.c.text
+                color: panel.c.muted
                 renderType: Text.CurveRendering
-                font.family: Theme.displayFont
-                font.pixelSize: 9
-                font.letterSpacing: 1.2
+                font.family: Theme.fontFamily
+                font.pixelSize: 12
             }
         }
 
@@ -654,12 +636,17 @@ Item {
             label: "Lighting"
         }
 
-        Select {
-            width: column.width
-            options: panel.effectOptions
-            current: panel.effectIndex(Keyboard.effect)
-            placeholder: "Effect " + Keyboard.effect
-            onPicked: index => Keyboard.setEffect(panel.effects[index][0])
+        Setting {
+            label: "Effect"
+
+            Select {
+                x: 96
+                width: parent.width - 96
+                options: panel.effectOptions
+                current: panel.effectIndex(Keyboard.effect)
+                placeholder: "Effect " + Keyboard.effect
+                onPicked: index => Keyboard.setEffect(panel.effects[index][0])
+            }
         }
 
         Setting {
@@ -697,8 +684,14 @@ Item {
             disabled: !Keyboard.effectHasColor
 
             Row {
+                id: swatches
+
+                // Eight swatches always fit the control column (they overflowed at a fixed 24 px).
+                readonly property real size: Math.min(24, Math.floor((parent.width - 96 - 7 * spacing) / 8))
+
                 x: 96
-                spacing: 5
+                y: (28 - size) / 2
+                spacing: 3
 
                 Repeater {
                     model: 8
@@ -710,12 +703,12 @@ Item {
 
                         readonly property bool picked: Keyboard.color === index
 
-                        width: 22
-                        height: 22
-                        radius: 11
+                        width: swatches.size
+                        height: swatches.size
+                        radius: swatches.size / 2
                         color: "transparent"
                         border.width: 1
-                        border.color: picked ? panel.c.text : panel.c.border
+                        border.color: picked ? panel.c.text : swatchArea.containsMouse ? panel.c.faint : "transparent"
 
                         Rectangle {
                             anchors.centerIn: parent
@@ -745,8 +738,11 @@ Item {
                         }
 
                         MouseArea {
+                            id: swatchArea
+
                             anchors.fill: parent
                             enabled: Keyboard.effectHasColor
+                            hoverEnabled: true
                             cursorShape: Qt.PointingHandCursor
                             onClicked: Keyboard.setColor(swatch.index)
                         }
@@ -766,7 +762,7 @@ Item {
             Select {
                 x: 96
                 width: parent.width - 96
-                options: panel.sideModes
+                options: panel.sideModes.map(m => m.charAt(0) + m.slice(1).toLowerCase())
                 current: Keyboard.sideMode
                 onPicked: index => Keyboard.setSideMode(index)
             }
@@ -799,7 +795,7 @@ Item {
                 x: 96
                 width: parent.width - 96
                 count: 2
-                labels: ["HOME", "GIF"]
+                labels: ["Home", "GIF"]
                 value: Keyboard.boot - 1
                 onPicked: index => Keyboard.setBoot(index + 1)
             }
@@ -815,77 +811,60 @@ Item {
                 options: Keyboard.gifNames
                 current: Keyboard.gifNames.indexOf(Keyboard.gifSelected)
                 disabled: Keyboard.sending
-                placeholder: "no image in ~/Pictures/Keyboard"
+                placeholder: "No image in ~/Pictures/Keyboard"
                 onPicked: index => Keyboard.selectGif(Keyboard.gifNames[index])
             }
         }
 
         Setting {
-            label: "Send"
+            label: ""
             disabled: Keyboard.gifSelected === "" && !Keyboard.sending
 
             // idle: the button
-            Rectangle {
+            PanelButton {
                 x: 96
-                width: parent.width - 96
-                height: 24
-                radius: 4
                 visible: !Keyboard.sending
-                color: sendArea.containsMouse ? panel.c.surfaceAlt : "transparent"
-                border.width: 1
-                border.color: sendArea.containsMouse ? panel.c.muted : panel.c.border
-
-                Text {
-                    anchors.centerIn: parent
-                    text: "SEND TO SCREEN"
-                    color: panel.c.text
-                    renderType: Text.CurveRendering
-                    font.family: Theme.displayFont
-                    font.pixelSize: 9
-                    font.letterSpacing: 1.4
-                }
-
-                MouseArea {
-                    id: sendArea
-
-                    anchors.fill: parent
-                    hoverEnabled: true
-                    enabled: Keyboard.gifSelected !== ""
-                    cursorShape: Qt.PointingHandCursor
-                    onClicked: Keyboard.sendGif(Keyboard.gifSelected)
-                }
+                text: "Send to screen"
+                primary: true
+                enabled: Keyboard.gifSelected !== ""
+                onClicked: Keyboard.sendGif(Keyboard.gifSelected)
             }
 
             // sending: the progress, and a cancel
             Item {
                 x: 96
                 width: parent.width - 96
-                height: 24
+                height: 28
                 visible: Keyboard.sending
 
                 Text {
                     anchors.left: parent.left
                     anchors.verticalCenter: parent.verticalCenter
-                    text: Keyboard.sentFrames > 0 ? "FRAME " + Keyboard.sentFrame + "/" + Keyboard.sentFrames + " · " + panel.sendPct + "%" : "STARTING"
+                    anchors.verticalCenterOffset: -2
+                    text: Keyboard.sentFrames > 0 ? "Frame " + Keyboard.sentFrame + " of " + Keyboard.sentFrames + ", " + panel.sendPct + "%" : "Starting…"
                     color: panel.c.text
                     renderType: Text.CurveRendering
-                    font.family: Theme.displayFont
-                    font.pixelSize: 9
-                    font.letterSpacing: 1.2
+                    font.family: Theme.fontFamily
+                    font.pixelSize: 12
+                    font.features: { "tnum": 1 }
                 }
 
                 Text {
                     anchors.right: parent.right
                     anchors.verticalCenter: parent.verticalCenter
-                    text: "CANCEL"
-                    color: panel.c.dangerText
+                    anchors.verticalCenterOffset: -2
+                    text: "Cancel"
+                    color: cancelArea.containsMouse ? panel.c.dangerText : panel.c.muted
                     renderType: Text.CurveRendering
-                    font.family: Theme.displayFont
-                    font.pixelSize: 9
-                    font.letterSpacing: 1.2
+                    font.family: Theme.fontFamily
+                    font.pixelSize: 12
 
                     MouseArea {
+                        id: cancelArea
+
                         anchors.fill: parent
+                        anchors.margins: -4
+                        hoverEnabled: true
                         cursorShape: Qt.PointingHandCursor
                         onClicked: Keyboard.cancelGif()
                     }
@@ -898,12 +877,14 @@ Item {
                     anchors.right: parent.right
                     anchors.bottom: parent.bottom
                     height: 2
-                    color: panel.c.border
+                    radius: 1
+                    color: panel.c.surfaceAlt
 
                     Rectangle {
                         width: track.width * panel.sendPct / 100
                         height: track.height
-                        color: panel.c.accent
+                        radius: 1
+                        color: panel.c.text
                     }
                 }
             }
@@ -912,26 +893,28 @@ Item {
         Text {
             width: column.width
             visible: Keyboard.gifError !== "" || Keyboard.gifSent !== ""
-            text: Keyboard.gifError !== "" ? Keyboard.gifError : "sent: " + Keyboard.gifSent
+            text: Keyboard.gifError !== "" ? Keyboard.gifError : "Sent " + Keyboard.gifSent + " to the screen."
             textFormat: Text.PlainText
             wrapMode: Text.WordWrap
             color: Keyboard.gifError !== "" ? panel.c.dangerText : panel.c.muted
             renderType: Text.CurveRendering
-            font.family: Theme.monoFont
-            font.pixelSize: 9
+            font.family: Theme.fontFamily
+            font.pixelSize: 11
         }
 
+        // The raw state the keyboard reports (hardware effect id and levels), or why it cannot be read.
         Text {
             width: column.width
             text: Keyboard.online
-                ? "hw " + Keyboard.effect + " · bri " + Keyboard.bright + "/6 · spd " + Keyboard.speed + "/4 · side " + Keyboard.sideMode + "/" + Keyboard.sideLevel
-                : (Keyboard.error !== "" ? Keyboard.error : "keyboard not found: cable connected?")
+                ? "Effect " + Keyboard.effect + ", brightness " + Keyboard.bright + "/6, speed " + Keyboard.speed + "/4, side glow " + Keyboard.sideMode + "/" + Keyboard.sideLevel
+                : (Keyboard.error !== "" ? Keyboard.error : "Keyboard not found. Is the cable connected?")
             textFormat: Text.PlainText
             wrapMode: Text.WordWrap
-            color: panel.c.muted
+            color: Keyboard.online ? panel.c.faint : panel.c.dangerText
             renderType: Text.CurveRendering
-            font.family: Theme.monoFont
-            font.pixelSize: 9
+            font.family: Theme.fontFamily
+            font.pixelSize: 11
+            font.features: { "tnum": 1 }
         }
     }
 

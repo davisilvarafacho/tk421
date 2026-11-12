@@ -17,7 +17,7 @@ Item {
 
         anchors.fill: parent
         radius: height / 2
-        color: "#26252b"
+        color: Theme.imperial.surfaceAlt
         clip: true
 
         Rectangle {
@@ -46,7 +46,7 @@ Item {
                 x: track.width * modelData
                 width: 1
                 height: parent.height
-                color: Theme.imperial.surface
+                color: Theme.imperial.ink
                 opacity: 0.9
             }
         }
