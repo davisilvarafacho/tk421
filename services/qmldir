@@ -14,3 +14,4 @@ singleton Sound Sound.qml
 singleton Wallpaper Wallpaper.qml
 singleton Resources Resources.qml
 singleton Keyboard Keyboard.qml
+singleton Launch Launch.qml

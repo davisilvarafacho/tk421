@@ -1,0 +1,405 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>TK-421 Dock</title>
+<style>
+  /* Dock, first pass (2026-11-12), designed with the frontend-design and impeccable skills.
+     Concept: the island's twin. The island hangs from the top edge; the dock rises from the bottom edge with the same
+     opaque ink silhouette, mirrored: concave 10 px flares where it meets the screen edge, 18 px rounded top corners.
+     Hidden, it is a 76 x 6 ink lip at the bottom centre (the twin of the island's idle pill); pushing the pointer
+     against the bottom edge grows it into the dock. That morph is the one bold move; the rest is quiet.
+     Icons: candy-icons drawn grey (QML: MultiEffect saturation -1, as the launcher does), 0.62 at rest, 1 on hover.
+     State is colour, never shape: a short faint dash under a running app, a longer white one under the focused app.
+     Type: Geist sentence case for tooltips and the context menu; no Orbitron inside the dock.
+     Palette: ink #000000, hairline rgba(255,255,255,.09), text #E8E6E3, muted #8E8B88, faint #75737A, chip #1A1A21, row hover #0D0D10.
+        ┌──────────────────────────────────────────────────────────┐
+        │                        windows                           │
+        │                                                          │
+        │              ╭────────────────────────────╮              │
+        │              │ ◎ │ ▢ ▢ ▢ ▢ ▢ ▢ ▢ ▢ ▢ ▢ │ ▢ ▢ │              │
+        └─────────────╯  ━   ─ ─       ─ ─         ─ ─  ╰─────────────┘
+                       launcher | pinned apps        | running, not pinned
+     QML notes: a bottom-anchored PanelWindow (Top layer) whose mask is only the silhouette, plus a 2 px invisible
+     trigger strip at the bottom edge; exclusiveZone 0 in auto-hide, 58 in always. Apps from DesktopEntries, windows
+     from Hyprland toplevels grouped by class, pinned list in a git-ignored dock/state.json. */
+  :root {
+    color-scheme: dark;
+    --ink: #000;
+    --line: rgba(255, 255, 255, 0.09);
+    --text: #e8e6e3;
+    --muted: #8e8b88;
+    --faint: #75737a;
+    --chip: #1a1a21;
+    --hover: #0d0d10;
+    --ease: cubic-bezier(0.22, 1, 0.36, 1);
+    --ui: "Geist", sans-serif;
+    --display: "Orbitron", "Geist", sans-serif;
+  }
+  @font-face { font-family: "MS"; src: url("file:///usr/share/fonts/TTF/MaterialSymbolsSharp[FILL,GRAD,opsz,wght].ttf"); }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  html, body { height: 100%; }
+  body { background: #050505; font: 13px/1.4 var(--ui); color: var(--text); overflow: hidden; -webkit-font-smoothing: antialiased; }
+  ::selection { background: var(--chip); color: #fff; }
+  button { font: inherit; color: inherit; background: none; border: 0; cursor: pointer; }
+  :focus-visible { outline: 1px solid #7d8db0; outline-offset: 2px; }
+  .ms { font: 16px/1 "MS"; font-variation-settings: "FILL" 0, "wght" 300, "GRAD" 0, "opsz" 24; display: inline-block; width: 1em; height: 1em; overflow: hidden; user-select: none; }
+
+  .wall { position: fixed; inset: 0; background: url("wallpaper.jpg") center / cover no-repeat; filter: brightness(0.78); }
+
+  /* ---------- desktop context (not part of the design) ---------- */
+  .pill { position: fixed; top: 4px; height: 30px; display: flex; align-items: center; gap: 4px; padding: 0 16px; background: var(--ink); border: 1px solid var(--line); border-radius: 15px; color: #b5bac3; }
+  .pill.ws { left: 30px; gap: 12px; font: 500 10px/1 var(--display); letter-spacing: 0.4px; color: var(--faint); }
+  .pill.ws b { color: var(--text); font-weight: 500; }
+  .pill.tools { right: 30px; gap: 12px; }
+  .island { position: fixed; top: 0; left: 50%; transform: translateX(-50%); width: 144px; height: 38px; }
+  .island svg { position: absolute; inset: 0; }
+  .island span { position: absolute; inset: 0; display: grid; place-items: center; font: 500 13px/1 var(--display); letter-spacing: 1px; padding-bottom: 2px; }
+
+  .win { position: fixed; top: 86px; background: rgba(12, 11, 13, 0.94); border: 1px solid #2a2a30; border-radius: 10px; transition: bottom 360ms var(--ease); overflow: hidden; }
+  .win.l { left: 30px; right: calc(50% + 4px); }
+  .win.r { left: calc(50% + 4px); right: 30px; }
+  .win i { display: block; height: 8px; margin: 22px 26px 0; background: #1a1a1f; border-radius: 4px; }
+  .win i:nth-child(2) { width: 46%; } .win i:nth-child(3) { width: 72%; } .win i:nth-child(4) { width: 38%; } .win i:nth-child(5) { width: 60%; }
+
+  /* ---------- prototype controls ---------- */
+  .ctl { position: fixed; top: 48px; left: 50%; transform: translateX(-50%); display: flex; align-items: center; gap: 10px; z-index: 5; }
+  .seg { display: flex; gap: 2px; padding: 3px; background: #000; border-radius: 15px; border: 1px solid var(--line); }
+  .seg button { padding: 5px 10px; border-radius: 12px; font: 500 9.5px/1 var(--display); letter-spacing: 0.16em; color: var(--muted); }
+  .seg button.on { background: var(--chip); color: var(--text); }
+  .hint { font-size: 12px; color: var(--text); background: #000; border: 1px solid var(--line); padding: 5px 12px; border-radius: 15px; }
+
+  /* ---------- the dock ---------- */
+  .dock { position: fixed; left: 50%; bottom: 0; z-index: 3; pointer-events: none; }
+  .dock svg { position: absolute; left: 0; bottom: 0; overflow: visible; }
+  .dock .shape { fill: var(--ink); }
+  .dock .edge { fill: none; stroke: var(--line); stroke-width: 1; }
+  .items { position: absolute; left: 0; bottom: 0; height: 58px; }
+  .cell { position: absolute; bottom: 0; height: 58px; pointer-events: auto; border-radius: 12px; }
+  .cell:focus-visible { outline-offset: -2px; }
+  .chip { position: absolute; left: 50%; bottom: 9px; width: 40px; height: 40px; margin-left: -20px; border-radius: 12px; background: var(--chip); opacity: 0; transition: opacity 140ms; }
+  .nomag .cell.hot .chip { opacity: 1; }
+  .ico { position: absolute; left: 50%; bottom: 13px; width: 32px; height: 32px; margin-left: -16px; transform-origin: 50% 100%; }
+  .ico img { width: 100%; height: 100%; display: block; filter: grayscale(1); opacity: 0.62; transition: opacity 140ms; }
+  .cell.hot .ico img, .cell.ctx .ico img { opacity: 1; }
+  .ico.mark img { filter: none; padding: 3px; }
+  .dash { position: absolute; left: 50%; bottom: 4px; height: 2px; width: 0; border-radius: 1px; background: var(--faint); transform: translateX(-50%); transition: width 220ms var(--ease), background-color 220ms; }
+  .cell.run .dash { width: 5px; }
+  .cell.focus .dash { width: 14px; background: var(--text); }
+  .cell.launching .dash { width: 5px; background: var(--muted); animation: breathe 700ms ease-in-out infinite alternate; }
+  @keyframes breathe { from { opacity: 0.25; } to { opacity: 1; } }
+  .sep { position: absolute; bottom: 19px; width: 1px; height: 22px; background: var(--line); }
+
+  .tip { position: fixed; z-index: 4; transform: translateX(-50%); padding: 6px 12px 7px; background: var(--ink); border: 1px solid var(--line); border-radius: 13px; font-size: 12.5px; color: var(--text); white-space: nowrap; pointer-events: none; opacity: 0; transition: opacity 120ms; }
+  .tip.on { opacity: 1; }
+  .tip small { color: var(--faint); font-size: 12px; margin-left: 6px; }
+
+  .menu { position: fixed; z-index: 4; width: 232px; transform: translateX(-50%); padding: 6px; background: var(--ink); border: 1px solid var(--line); border-radius: 18px; opacity: 0; translate: 0 6px; pointer-events: none; transition: opacity 160ms var(--ease), translate 220ms var(--ease); }
+  .menu.on { opacity: 1; translate: 0 0; pointer-events: auto; }
+  .menu h3 { font: 600 13px/1 var(--ui); padding: 10px 12px 4px; }
+  .menu p { font-size: 12px; color: var(--faint); padding: 0 12px 8px; }
+  .menu button { display: flex; align-items: center; gap: 10px; width: 100%; height: 34px; padding: 0 12px; border-radius: 14px; text-align: left; color: var(--muted); transition: background-color 120ms, color 120ms; }
+  .menu button:hover, .menu button:focus-visible { background: var(--hover); color: var(--text); outline: none; }
+  .menu button.cur { color: var(--text); }
+  .menu button .t { flex: 1; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .menu button .ms { color: var(--faint); }
+  .menu hr { border: 0; height: 1px; background: var(--line); margin: 6px 8px; }
+
+  @media (prefers-reduced-motion: reduce) { .win, .menu, .dash { transition: none; } .cell.launching .dash { animation: none; } }
+</style>
+</head>
+<body>
+<div class="wall"></div>
+
+<div class="pill ws"><b>1</b><span>2</span><span>3</span><span>6</span><span>10</span></div>
+<div class="island"><svg id="islandSvg"></svg><span>14:32</span></div>
+<div class="pill tools"><span class="ms">wifi</span><span class="ms">volume_up</span><span class="ms">notifications</span><span class="ms">power_settings_new</span></div>
+
+<div class="win l"><i></i><i></i><i></i><i></i><i></i></div>
+<div class="win r"><i></i><i></i><i></i><i></i></div>
+
+<div class="ctl">
+  <div class="seg" id="modeSeg"><button data-v="auto" class="on">AUTO-HIDE</button><button data-v="always">ALWAYS</button></div>
+  <div class="seg" id="magSeg"><button data-v="on" class="on">MAGNIFY</button><button data-v="off">STILL</button></div>
+  <span class="hint" id="hint">Push the pointer against the bottom edge</span>
+</div>
+
+<div class="dock" id="dock">
+  <svg id="dockSvg"><path class="shape" id="shape"/><path class="edge" id="edge"/></svg>
+  <div class="items" id="items"></div>
+</div>
+<div class="tip" id="tip"></div>
+<div class="menu" id="menu" role="menu"></div>
+
+<script>
+  // ---------- data (fake; QML reads DesktopEntries + Hyprland toplevels) ----------
+  const APPS = [
+    { id: "ghostty",     name: "Ghostty",      pinned: true,  wins: ["~/Development/quickshell", "btop"] },
+    { id: "vivaldi",     name: "Vivaldi",      pinned: true,  wins: ["Quickshell docs"] },
+    { id: "files",       name: "Files",        pinned: true,  wins: [] },
+    { id: "code",        name: "Visual Studio Code", pinned: true, wins: [] },
+    { id: "claude",      name: "Claude",       pinned: true,  wins: [] },
+    { id: "spotify",     name: "Spotify",      pinned: true,  wins: ["Spotify Premium"] },
+    { id: "telegram",    name: "Telegram",     pinned: true,  wins: ["Telegram"] },
+    { id: "discord",     name: "Discord",      pinned: true,  wins: [] },
+    { id: "thunderbird", name: "Thunderbird",  pinned: true,  wins: [] },
+    { id: "steam",       name: "Steam",        pinned: true,  wins: [] },
+    { id: "obs",         name: "OBS Studio",   pinned: false, wins: ["OBS 31.0 - Profile: Untitled"] },
+    { id: "loupe",       name: "Image Viewer", pinned: false, wins: ["wallpaper.jpg"] },
+  ];
+  let focused = "ghostty";
+  const launching = new Set();
+
+  // ---------- geometry ----------
+  const G = { H: 58, cell: 44, gap: 4, pad: 12, flare: 10, radius: 18, icon: 32, lipW: 76, lipH: 6, sepW: 13, mag: 0.32, reach: 2.4 };
+  const reduce = matchMedia("(prefers-reduced-motion: reduce)").matches;
+  let mode = "auto", magnify = true;
+
+  // Mirrored island silhouette: concave flares at the bottom edge, rounded top corners. Width w, height h.
+  function dockPath(w, h) {
+    const r = Math.min(G.flare, h / 2), R = Math.max(0, Math.min(G.radius, h - r, (w - 2 * r) / 2));
+    const fill = `M0,${h} A${r},${r} 0 0 0 ${r},${h - r} L${r},${R} A${R},${R} 0 0 1 ${r + R},0 L${w - r - R},0 A${R},${R} 0 0 1 ${w - r},${R} L${w - r},${h - r} A${r},${r} 0 0 0 ${w},${h} Z`;
+    const edge = `M0,${h - 0.5} A${r},${r} 0 0 0 ${r + 0.5},${h - r} L${r + 0.5},${R} A${R - 0.5},${R - 0.5} 0 0 1 ${r + R},0.5 L${w - r - R},0.5 A${R - 0.5},${R - 0.5} 0 0 1 ${w - r - 0.5},${R} L${w - r - 0.5},${h - r} A${r},${r} 0 0 0 ${w},${h - 0.5}`;
+    return { fill, edge };
+  }
+  // The island, for context: same shape flipped.
+  (function () {
+    const s = document.getElementById("islandSvg"), p = dockPath(144, 38);
+    s.setAttribute("viewBox", "0 0 144 38"); s.setAttribute("width", 144); s.setAttribute("height", 38);
+    s.innerHTML = `<g transform="translate(0,38) scale(1,-1)"><path d="${p.fill}" fill="#000"/><path d="${p.edge}" fill="none" stroke="rgba(255,255,255,.09)"/></g>`;
+  })();
+
+  // ---------- build items ----------
+  const itemsEl = document.getElementById("items");
+  const slots = [];   // { kind: "app"|"sep"|"launcher", app?, el, s (current scale), base }
+  function build() {
+    itemsEl.innerHTML = ""; slots.length = 0;
+    const add = (kind, app) => {
+      let el;
+      if (kind === "sep") { el = document.createElement("div"); el.className = "sep"; }
+      else {
+        el = document.createElement("button");
+        el.className = "cell";
+        el.setAttribute("aria-label", kind === "launcher" ? "Apps" : app.name);
+        const src = kind === "launcher" ? "icons/deathstar.svg" : `icons/${app.id}.svg`;
+        el.innerHTML = `<span class="chip"></span><span class="ico${kind === "launcher" ? " mark" : ""}"><img src="${src}" alt=""></span><span class="dash"></span>`;
+      }
+      itemsEl.appendChild(el);
+      slots.push({ kind, app, el, s: 1 });
+    };
+    add("launcher"); add("sep");
+    APPS.filter(a => a.pinned).forEach(a => add("app", a));
+    const loose = APPS.filter(a => !a.pinned && a.wins.length);
+    if (loose.length) { add("sep"); loose.forEach(a => add("app", a)); }
+    slots.forEach(bindSlot);
+    paintState();
+  }
+  function paintState() {
+    slots.forEach(sl => {
+      if (sl.kind !== "app") return;
+      const a = sl.app;
+      sl.el.classList.toggle("run", a.wins.length > 0);
+      sl.el.classList.toggle("focus", a.id === focused && a.wins.length > 0);
+      sl.el.classList.toggle("launching", launching.has(a.id));
+    });
+  }
+
+  // ---------- reveal state ----------
+  let open = 0, target = 0, hideTimer = 0, edgeTimer = 0;
+  let mouse = { x: -1, y: -1, inDock: false };
+  const menuEl = document.getElementById("menu"), tipEl = document.getElementById("tip");
+  let menuFor = null, hot = null;
+
+  function reveal() { clearTimeout(hideTimer); target = 1; }
+  function scheduleHide() {
+    if (mode === "always" || menuFor) return;
+    clearTimeout(hideTimer);
+    hideTimer = setTimeout(() => { target = 0; }, 380);
+  }
+
+  addEventListener("pointermove", e => {
+    mouse.x = e.clientX; mouse.y = e.clientY;
+    const nearEdge = e.clientY >= innerHeight - 3;
+    if (nearEdge && target === 0 && mode === "auto") { clearTimeout(edgeTimer); edgeTimer = setTimeout(reveal, 120); }
+    else if (!nearEdge) clearTimeout(edgeTimer);
+    // "In the dock" = inside its band, with some headroom for magnified icons.
+    const w = layoutWidth(), left = innerWidth / 2 - w / 2;
+    mouse.inDock = open > 0.5 && e.clientY >= innerHeight - G.H - 24 && e.clientX >= left && e.clientX <= left + w;
+    if (mouse.inDock || (nearEdge && mode === "auto")) clearTimeout(hideTimer);
+    else if (target === 1) scheduleHide();
+  });
+  document.documentElement.addEventListener("pointerleave", () => { mouse.inDock = false; mouse.x = -1; scheduleHide(); });
+
+  // ---------- layout + animation loop ----------
+  let lastW = 0;
+  function baseWidth(sl) { return sl.kind === "sep" ? G.sepW : G.cell; }
+  function layoutWidth() {
+    let w = 2 * (G.flare + G.pad);
+    slots.forEach((sl, i) => { w += baseWidth(sl) * (sl.kind === "sep" ? 1 : sl.s); if (i) w += G.gap; });
+    return w;
+  }
+  const ease = t => 1 - Math.pow(1 - t, 3);
+  let prog = 0, last = performance.now(), afterFirstFrame = null;
+  const dockEl = document.getElementById("dock"), svg = document.getElementById("dockSvg");
+  const shape = document.getElementById("shape"), edge = document.getElementById("edge");
+
+  function frame(now) {
+    const dt = Math.min(64, now - last); last = now;
+    // progress toward target: 360 ms to open, 260 ms to close
+    const dur = reduce ? 1 : (target ? 360 : 260);
+    prog += (target ? 1 : -1) * dt / dur; prog = Math.max(0, Math.min(1, prog));
+    open = target ? ease(prog) : 1 - ease(1 - prog);
+
+    // magnification targets from base (unscaled) centres, like macOS, so the dock does not chase the pointer
+    const baseTotal = slots.reduce((w, sl, i) => w + baseWidth(sl) + (i ? G.gap : 0), 0);
+    let x = innerWidth / 2 - baseTotal / 2;
+    slots.forEach(sl => {
+      const bw = baseWidth(sl), cx = x + bw / 2; x += bw + G.gap;
+      let want = 1;
+      if (magnify && sl.kind !== "sep" && mouse.inDock && open > 0.9 && !menuFor) {
+        const d = Math.abs(mouse.x - cx) / (G.cell * G.reach);
+        if (d < 1) want = 1 + G.mag * (Math.cos(d * Math.PI) + 1) / 2;
+      }
+      sl.s += (want - sl.s) * (reduce ? 1 : Math.min(1, dt / 70));
+      if (Math.abs(want - sl.s) < 0.002) sl.s = want;
+    });
+
+    const fullW = layoutWidth();
+    const w = G.lipW + (fullW - G.lipW) * open, h = G.lipH + (G.H - G.lipH) * open;
+    const visible = mode === "always" || open > 0.001 || mode === "auto";
+    dockEl.style.display = visible ? "block" : "none";
+    dockEl.style.width = w + "px"; dockEl.style.height = h + "px"; dockEl.style.marginLeft = -w / 2 + "px";
+    svg.setAttribute("width", w); svg.setAttribute("height", h); svg.setAttribute("viewBox", `0 0 ${w} ${h}`);
+    const p = dockPath(w, h); shape.setAttribute("d", p.fill); edge.setAttribute("d", p.edge);
+
+    // items: laid out across the full width, faded in late, lifted from below
+    const fade = Math.max(0, (open - 0.55) / 0.45);
+    itemsEl.style.width = fullW + "px";
+    itemsEl.style.left = (w - fullW) / 2 + "px";
+    itemsEl.style.opacity = fade;
+    itemsEl.style.transform = `translateY(${(1 - open) * 14}px)`;
+    itemsEl.style.visibility = open > 0.3 ? "visible" : "hidden";
+    let ix = G.flare + G.pad;
+    slots.forEach(sl => {
+      const bw = baseWidth(sl) * (sl.kind === "sep" ? 1 : sl.s);
+      sl.el.style.left = ix + (sl.kind === "sep" ? (G.sepW - 1) / 2 : 0) + "px";
+      if (sl.kind !== "sep") {
+        sl.el.style.width = bw + "px";
+        sl.el.querySelector(".ico").style.transform = `scale(${sl.s})`;
+        sl.x = innerWidth / 2 - fullW / 2 + ix + bw / 2;   // screen centre, for tooltip/menu
+      }
+      ix += bw + G.gap;
+    });
+    placeTip();
+
+    // windows make room only in always mode (exclusive zone)
+    const reserve = mode === "always" ? G.H + 8 : 8;
+    document.querySelectorAll(".win").forEach(wn => wn.style.bottom = reserve + "px");
+    if (afterFirstFrame) { const f = afterFirstFrame; afterFirstFrame = null; f(); }
+    requestAnimationFrame(frame);
+  }
+
+  // ---------- tooltip ----------
+  function placeTip() {
+    if (!hot || menuFor || open < 0.95) { tipEl.classList.remove("on"); return; }
+    const a = hot.app;
+    tipEl.innerHTML = "";
+    tipEl.append(hot.kind === "launcher" ? "Apps" : a.name);
+    if (a && a.wins.length > 1) { const s = document.createElement("small"); s.textContent = `${a.wins.length} windows`; tipEl.append(s); }
+    tipEl.style.left = hot.x + "px";
+    tipEl.style.bottom = (13 + G.icon * hot.s + 10) + "px";
+    tipEl.classList.add("on");
+  }
+
+  // ---------- interaction ----------
+  function bindSlot(sl) {
+    if (sl.kind === "sep") return;
+    const el = sl.el;
+    el.addEventListener("pointerenter", () => { hot = sl; el.classList.add("hot"); });
+    el.addEventListener("pointerleave", () => { if (hot === sl) hot = null; el.classList.remove("hot"); });
+    el.addEventListener("focus", () => { reveal(); hot = sl; el.classList.add("hot"); });
+    el.addEventListener("blur", () => { if (hot === sl) hot = null; el.classList.remove("hot"); });
+    el.addEventListener("click", () => activate(sl));
+    el.addEventListener("contextmenu", e => { e.preventDefault(); if (sl.kind === "app") openMenu(sl); });
+  }
+
+  function activate(sl) {
+    closeMenu();
+    if (sl.kind === "launcher") { flashHint("Opens the launcher, the same as SUPER+Space"); return; }
+    const a = sl.app;
+    if (launching.has(a.id)) return;
+    if (!a.wins.length) {
+      launching.add(a.id); paintState();
+      setTimeout(() => { launching.delete(a.id); a.wins = [a.name]; focused = a.id; paintState(); }, 1100);
+      return;
+    }
+    if (focused === a.id && a.wins.length > 1) { a.wins.push(a.wins.shift()); flashHint(`Cycled to “${a.wins[0]}”`); }
+    focused = a.id; paintState();
+  }
+
+  function openMenu(sl) {
+    const a = sl.app; menuFor = sl; sl.el.classList.add("ctx"); reveal();
+    const n = a.wins.length;
+    menuEl.innerHTML = "";
+    const h = document.createElement("h3"); h.textContent = a.name; menuEl.append(h);
+    const p = document.createElement("p"); p.textContent = n ? (n === 1 ? "1 window" : `${n} windows`) : "Not running"; menuEl.append(p);
+    const row = (icon, text, fn, cur) => {
+      const b = document.createElement("button"); b.setAttribute("role", "menuitem");
+      if (cur) b.className = "cur";
+      b.innerHTML = `<span class="ms">${icon}</span><span class="t"></span>`;
+      b.querySelector(".t").textContent = text;
+      b.addEventListener("click", () => { fn(); closeMenu(); });
+      menuEl.append(b); return b;
+    };
+    a.wins.forEach((t, i) => row("web_asset", t, () => { focused = a.id; a.wins.unshift(...a.wins.splice(i, 1)); paintState(); }, i === 0 && focused === a.id));
+    if (n) menuEl.append(document.createElement("hr"));
+    row("add", "New window", () => {
+      if (!a.wins.length) return activate(sl);
+      a.wins.unshift(a.name); focused = a.id; paintState();
+    });
+    row(a.pinned ? "keep_off" : "keep", a.pinned ? "Remove from dock" : "Keep in dock", () => { a.pinned = !a.pinned; build(); });
+    if (n) row("close", n === 1 ? "Close window" : `Close ${n} windows`, () => { a.wins = []; if (focused === a.id) focused = ""; build(); });
+    menuEl.style.left = sl.x + "px";
+    menuEl.style.bottom = (G.H + 10) + "px";
+    menuEl.classList.add("on");
+    menuEl.querySelector("button").focus({ preventScroll: true });
+  }
+  function closeMenu() {
+    if (!menuFor) return;
+    menuFor.el.classList.remove("ctx"); menuFor = null; menuEl.classList.remove("on");
+    if (!mouse.inDock) scheduleHide();
+  }
+  addEventListener("pointerdown", e => { if (menuFor && !menuEl.contains(e.target) && !menuFor.el.contains(e.target)) closeMenu(); });
+  addEventListener("keydown", e => {
+    if (e.key === "Escape") closeMenu();
+    if (menuFor && (e.key === "ArrowDown" || e.key === "ArrowUp")) {
+      const bs = [...menuEl.querySelectorAll("button")], i = bs.indexOf(document.activeElement);
+      bs[(i + (e.key === "ArrowDown" ? 1 : -1) + bs.length) % bs.length].focus(); e.preventDefault();
+    }
+  });
+
+  // ---------- prototype controls ----------
+  const hintEl = document.getElementById("hint");
+  const HINT = { auto: "Push the pointer against the bottom edge", always: "Windows leave room for the dock" };
+  let hintTimer = 0;
+  function flashHint(t) { hintEl.textContent = t; clearTimeout(hintTimer); hintTimer = setTimeout(() => hintEl.textContent = HINT[mode], 1800); }
+  function seg(id, fn) {
+    const el = document.getElementById(id);
+    el.addEventListener("click", e => {
+      const b = e.target.closest("button"); if (!b) return;
+      el.querySelectorAll("button").forEach(x => x.classList.toggle("on", x === b)); fn(b.dataset.v);
+    });
+  }
+  seg("modeSeg", v => { mode = v; hintEl.textContent = HINT[v]; if (v === "always") reveal(); else scheduleHide(); });
+  seg("magSeg", v => { magnify = v === "on"; document.body.classList.toggle("nomag", !magnify); });
+
+  build();
+  requestAnimationFrame(frame);
+  // Review hooks: #always opens it pinned, #menu also opens Ghostty's menu, #still turns magnification off.
+  if (location.hash.includes("always")) { document.querySelector('#modeSeg [data-v="always"]').click(); prog = 1; }
+  if (location.hash.includes("still")) document.querySelector('#magSeg [data-v="off"]').click();
+  if (location.hash.includes("menu")) afterFirstFrame = () => openMenu(slots.find(s => s.app && s.app.id === "ghostty"));
+</script>
+</body>
+</html>

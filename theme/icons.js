@@ -13,7 +13,7 @@ var PLAIN = [
     "refresh", "calendar_today", "music_note", "chevron_left", "chevron_right", "expand_more",
     "check", "close", "headphones", "videocam", "tv", "speaker", "mouse", "smartphone",
     "sports_esports", "content_paste", "content_copy", "delete", "link", "code",
-    "description", "auto_awesome"
+    "description", "auto_awesome", "wallpaper", "calculate", "web_asset", "add", "keep", "keep_off"
 ]
 
 var EXCEPTIONS = {

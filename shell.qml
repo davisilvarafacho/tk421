@@ -3,6 +3,7 @@ import Quickshell
 import QtQuick
 import "bar"
 import "clipboard"
+import "dock"
 import "dropdown"
 import "island"
 import "launcher"
@@ -41,6 +42,7 @@ ShellRoot {
     UsageCard {}
     WallpaperStage {}
     DesktopWidgets {}
+    Dock {}
     WallpaperPicker {}
     Lock {}
 }

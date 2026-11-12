@@ -11,8 +11,22 @@
 - [ ] configurações de usuário
 - [ ] melhorar as notificações bar
 - [ ] melhorar design das notificações
-- [ ] island v2 - inspiração redit
+- [ ] island v2 - inspiração redit - https://www.reddit.com/r/unixporn/comments/1xabt09/hyprland_impasto_06_liquid_glass_a_bezel_bar_and/
 - [ ] waybar
+- [ ] spcitify
+- [ ] better-discord
+- [ ] sync themas + auto: discord, spotify, vscode
+- [ ] tranparência em todas as janelas
+- [ ] banir botões: _ []
+- [ ] Dock
+- [ ] melhorar resolução imagem youtube
+- [ ] escolher icons mais cheios
+- [ ] mudar a death star
+- [ ] island muito travado
+- [ ] 
+
+- [ ] 
+
 
 ## Concluídos
 
@@ -30,3 +44,8 @@
 - [x] widgets
 - [x] menu on hover de cpu gpu e ram
 
+
+
+## Inspirações
+
+1. https://github.com/andreumassanet/impasto

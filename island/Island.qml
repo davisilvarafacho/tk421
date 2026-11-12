@@ -172,6 +172,13 @@ PanelWindow {
         radius: 18      // one radius in every state; leaves a straight wall below the flare in the idle pill (38 - 10 - 18)
         color: "transparent"
         clip: true
+        // SUPER+Space: the launcher (launcher/Launcher.qml, Overlay layer) grows out of this exact shape and covers it.
+        opacity: Launch.open ? 0 : 1
+
+        Behavior on opacity { NumberAnimation { duration: Launch.open ? 0 : 200 } }
+
+        Binding { target: Launch; property: "islandWidth"; value: card.width }
+        Binding { target: Launch; property: "islandHeight"; value: card.height }
 
         Behavior on width { Ease { duration: win.open ? 520 : 340 } }
         Behavior on height { Ease { duration: win.open ? 520 : 340 } }

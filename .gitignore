@@ -5,6 +5,8 @@ agenda/.venv/
 .superpowers/
 __pycache__/
 wallpaper/state.json
+dock/state.json
+launcher/history.json
 .pytest_cache/
 
 # Vivaldi theme zip, built by vivaldi/build-theme.lua
@@ -13,3 +15,4 @@ vivaldi/dist/
 # Tool caches with session data (they hold chat prompts): local only
 .trail/cache/
 graft/.cache/
+graphify-out/
